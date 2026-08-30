@@ -1,6 +1,19 @@
-# 🩺 Healix — AI Healthcare & Clinical Information Assistant
+<p align="center">
+  <img src="assets/logo.png" alt="Healix Logo" width="90" height="90" />
+</p>
 
-**Healix** is a full-stack, safety-first AI healthcare intelligence platform. It provides real-time streaming consultations, multi-engine document parsing (PDF, Word, Lab Reports), live medical web search via Tavily, visual inspection of medical images, structured tabular comparisons, and personalized patient clinical safety profiles.
+<h1 align="center">Healix — AI Healthcare & Clinical Information Assistant</h1>
+
+<p align="center">
+  <strong>Safety-first AI healthcare intelligence platform with real-time streaming, multi-engine document reading, live web search, and clinical safety grounding.</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-blue?logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python" alt="Python 3.11+" />
+</p>
 
 ---
 
