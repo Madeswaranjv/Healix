@@ -132,4 +132,4 @@ Haelix/
 ## ⚖️ Medical Disclaimer
 
 > **Healix is an AI-powered health informational tool designed for educational and informational support only.**  
-> It does not provide definitive medical diagnoses, prescriptions, or emergency care. Users should always consult with a licensed physician or qualified healthcare provider regarding medical conditions or symptoms. In medical emergencies, contact local emergency services immediately (e.g., 911 / 112)
+> It does not provide definitive medical diagnoses, prescriptions, or emergency care. Users should always consult with a licensed physician or qualified healthcare provider regarding medical conditions or symptoms. In medical emergencies, contact local emergency services immediately (e.g., 911 / 112).

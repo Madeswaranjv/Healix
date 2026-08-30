@@ -1,4 +1,5 @@
 """Session and conversation history persistence service backed by SQLite."""
+import re
 import time
 import json
 import uuid
