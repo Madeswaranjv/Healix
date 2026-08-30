@@ -50,13 +50,13 @@ export default function PulseIndicator({ isWebSearch = false }) {
 
   return (
     <div className="flex gap-3 items-center py-2">
-      {/* Animated Transforming Logo Avatar */}
+      {/* Animated Transforming Logo Avatar — Expanded and rounded without square limits */}
       <div className="relative flex-shrink-0 flex items-center justify-center">
-        <div className="w-7 h-7 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-visible">
           <img
             src="/logo_animation.webp"
             alt="Healix AI"
-            className="w-full h-full object-contain select-none pointer-events-none"
+            className="w-full h-full object-contain select-none pointer-events-none rounded-full"
           />
         </div>
       </div>

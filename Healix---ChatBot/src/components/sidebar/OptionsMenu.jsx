@@ -116,7 +116,7 @@ export default function OptionsMenu({ onClose }) {
   return (
     <div
       ref={menuRef}
-      className="absolute top-full left-0 mt-1 z-50 flyout-menu"
+      className="absolute top-full right-0 mt-1 z-50 flyout-menu min-w-[130px] shadow-xl border border-border/80 bg-surface rounded-xl p-1"
       role="menu"
       aria-label="Application menu"
     >
@@ -129,33 +129,33 @@ export default function OptionsMenu({ onClose }) {
         >
           {/* Top-level section trigger */}
           <button
-            className="flyout-item"
+            className="flyout-item w-full flex items-center justify-between"
             role="menuitem"
             aria-haspopup="true"
             aria-expanded={activeSection === section.label}
           >
-            <span className="flex-1">{section.label}</span>
-            <ChevronRight size={14} className="text-muted" />
+            <span className="flex-1 text-left">{section.label}</span>
+            <ChevronRight size={13} className="text-muted ml-2 flex-shrink-0" />
           </button>
 
           {/* Submenu — appears to the right on hover */}
           {activeSection === section.label && (
             <div
-              className="absolute left-full top-0 ml-[1px] flyout-menu min-w-[220px]"
+              className="absolute left-full top-0 ml-1.5 flyout-menu min-w-[220px] shadow-2xl border border-border/90 bg-surface rounded-xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100"
               role="menu"
               aria-label={`${section.label} submenu`}
             >
               {section.items.map((item) => (
                 <button
                   key={item.action}
-                  className="flyout-item"
+                  className="flyout-item w-full text-left flex items-center gap-2.5"
                   onClick={() => handleAction(item.action)}
                   role="menuitem"
                 >
-                  <item.icon size={16} className="text-muted flex-shrink-0" />
-                  <span className="flex-1">{item.label}</span>
+                  <item.icon size={15} className="text-muted flex-shrink-0" />
+                  <span className="flex-1 text-xs">{item.label}</span>
                   {item.shortcut && (
-                    <span className="shortcut">{item.shortcut}</span>
+                    <span className="shortcut text-[10px] text-muted font-mono">{item.shortcut}</span>
                   )}
                 </button>
               ))}

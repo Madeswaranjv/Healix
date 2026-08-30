@@ -125,8 +125,8 @@ export function Sidebar() {
         {isOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
       </button>
 
-      {/* Inner clipping wrapper that smoothly clips contents to aside's exact width */}
-      <div className={`w-full h-full overflow-hidden transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      {/* Inner wrapper: overflow-visible when open so submenus float over canvas; overflow-hidden when closed */}
+      <div className={`w-full h-full ${isOpen ? 'overflow-visible' : 'overflow-hidden'} transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="flex flex-col h-full w-[280px] min-w-[280px]">
           {/* Top Header */}
           <div className="flex items-center justify-between p-3.5 pb-2">
