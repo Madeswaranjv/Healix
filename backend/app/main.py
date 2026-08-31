@@ -13,6 +13,7 @@ from app.core.prompts import build_chat_prompt
 from app.services.document_parser import process_uploaded_document
 from app.services.vector_service import vector_service
 from app.services.search_service import search_service
+from app.services.mcp_service import mcp_service
 from app.services.llm_service import llm_service
 from app.services.chat_history import chat_history_manager
 from app.services.user_service import user_service
@@ -397,7 +398,7 @@ async def upload_document(
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    """Answers healthcare queries using user health profile, RAG context, optional web search, session conversation memory, and safety prompts."""
+    """Answers healthcare queries using user health profile, RAG context, optional MCP web search, session conversation memory, and safety prompts."""
     user_query = request.message.strip()
     session_id = request.session_id.strip()
     user_id = (request.user_id or "user_default").strip()
@@ -412,9 +413,6 @@ async def chat(request: ChatRequest):
         top_k=4
     )
     context_chunks = [item["content"] for item in retrieved_items]
-
-    # 3. Optional web search
-    search_results_formatted = []
     sources = []
 
     # Include document sources
@@ -428,36 +426,30 @@ async def chat(request: ChatRequest):
             "snippet": item["content"][:150] + "..."
         })
 
-    # Web search if requested
-    if request.use_web_search:
-        web_results = await search_service.search(user_query, max_results=3)
-        for idx, res in enumerate(web_results):
-            search_results_formatted.append(f"[{res['title']}] ({res['url']}): {res['content']}")
-            sources.append({
-                "id": f"web-{idx}",
-                "title": res["title"],
-                "url": res["url"],
-                "type": "web",
-                "snippet": res["content"][:150] + "..."
-            })
-
-    # 4. Fetch user clinical health summary (allergies, medications, conditions)
+    # 3. Fetch user clinical health summary (allergies, medications, conditions)
     user_health_summary = user_service.get_user_health_summary(user_id)
 
-    # 5. Fetch prior session conversation history (persists across model switches)
+    # 4. Fetch prior session conversation history
     chat_history = chat_history_manager.get_prompt_history(session_id=session_id)
 
-    # 6. Build prompt with safety guidelines, user health profile, grounded context, and conversation history
+    # 5. Build prompt with safety guidelines, user health profile, grounded context, and conversation history
     messages = build_chat_prompt(
         user_message=user_query,
         context_chunks=context_chunks,
-        search_results=search_results_formatted,
+        search_results=None,
         chat_history=chat_history,
         user_health_profile=user_health_summary
     )
 
-    # 7. Query OpenRouter LLM
-    raw_answer = await llm_service.generate_chat_response(messages, model=request.model)
+    # 6. Pass MCP tools if web search is enabled
+    tools = mcp_service.get_openai_tools() if request.use_web_search else None
+
+    # 7. Query OpenRouter LLM via tool-calling loop
+    llm_result = await llm_service.generate_chat_response(messages, model=request.model, tools=tools)
+    raw_answer = llm_result.get("answer", "")
+    web_sources = llm_result.get("sources", [])
+    if web_sources:
+        sources.extend(web_sources)
 
     # 8. Format final answer with emergency warning if triggered
     final_answer = raw_answer
@@ -465,7 +457,7 @@ async def chat(request: ChatRequest):
         final_answer = EMERGENCY_BANNER + final_answer
 
     # 9. Store user message in SQLite & memory
-    user_msg_record = session_service.add_message(
+    session_service.add_message(
         session_id=session_id,
         role="user",
         content=user_query,
@@ -495,7 +487,7 @@ async def chat(request: ChatRequest):
 
 @app.post("/chat/stream")
 async def chat_stream(request: ChatRequest):
-    """Streams healthcare AI responses token-by-token using Server-Sent Events (SSE)."""
+    """Streams healthcare AI responses token-by-token using Server-Sent Events (SSE) with live MCP tool events."""
     user_query = request.message.strip()
     session_id = request.session_id.strip()
     user_id = (request.user_id or "user_default").strip()
@@ -508,8 +500,6 @@ async def chat_stream(request: ChatRequest):
         top_k=4
     )
     context_chunks = [item["content"] for item in retrieved_items]
-
-    search_results_formatted = []
     sources = []
 
     for idx, item in enumerate(retrieved_items):
@@ -522,34 +512,24 @@ async def chat_stream(request: ChatRequest):
             "snippet": item["content"][:150] + "..."
         })
 
-    if request.use_web_search:
-        web_results = await search_service.search(user_query, max_results=3)
-        for idx, res in enumerate(web_results):
-            search_results_formatted.append(f"[{res['title']}] ({res['url']}): {res['content']}")
-            sources.append({
-                "id": f"web-{idx}",
-                "title": res["title"],
-                "url": res["url"],
-                "type": "web",
-                "snippet": res["content"][:150] + "..."
-            })
-
     user_health_summary = user_service.get_user_health_summary(user_id)
     chat_history = chat_history_manager.get_prompt_history(session_id=session_id)
 
     messages = build_chat_prompt(
         user_message=user_query,
         context_chunks=context_chunks,
-        search_results=search_results_formatted,
+        search_results=None,
         chat_history=chat_history,
         user_health_profile=user_health_summary
     )
 
+    tools = mcp_service.get_openai_tools() if request.use_web_search else None
+
     async def event_generator():
-        # 1. Send metadata event (sources, emergency status, chunks used)
+        # 1. Send initial metadata event (document sources, emergency status, chunks used)
         metadata_payload = {
             "type": "metadata",
-            "sources": sources,
+            "sources": list(sources),
             "is_emergency": is_emergency,
             "chunks_used": len(context_chunks)
         }
@@ -562,11 +542,34 @@ async def chat_stream(request: ChatRequest):
             accumulated_chunks.append(EMERGENCY_BANNER)
             yield f"data: {json.dumps({'type': 'delta', 'content': EMERGENCY_BANNER})}\n\n"
 
-        # 3. Stream response tokens from LLM
-        async for chunk in llm_service.generate_chat_stream(messages, model=request.model):
-            if chunk:
-                accumulated_chunks.append(chunk)
-                yield f"data: {json.dumps({'type': 'delta', 'content': chunk})}\n\n"
+        # 3. Stream from LLM service (handles MCP tool execution events and text deltas)
+        async for event in llm_service.generate_chat_stream(messages, model=request.model, tools=tools):
+            event_type = event.get("type")
+            
+            if event_type == "tool_call":
+                # Forward tool_call event to frontend
+                yield f"data: {json.dumps(event)}\n\n"
+            
+            elif event_type == "tool_result":
+                # Forward tool_result event and update sources metadata
+                new_sources = event.get("sources", [])
+                if new_sources:
+                    sources.extend(new_sources)
+                    yield f"data: {json.dumps(event)}\n\n"
+                    # Emit updated metadata with web sources
+                    yield f"data: {json.dumps({'type': 'metadata', 'sources': sources, 'is_emergency': is_emergency, 'chunks_used': len(context_chunks)})}\n\n"
+
+            elif event_type == "delta":
+                content_chunk = event.get("content", "")
+                if content_chunk:
+                    accumulated_chunks.append(content_chunk)
+                    yield f"data: {json.dumps({'type': 'delta', 'content': content_chunk})}\n\n"
+
+            elif event_type == "done":
+                done_sources = event.get("sources", [])
+                for s in done_sources:
+                    if not any(existing.get("url") == s.get("url") for existing in sources):
+                        sources.append(s)
 
         full_answer = "".join(accumulated_chunks)
 
@@ -588,7 +591,7 @@ async def chat_stream(request: ChatRequest):
             user_id=user_id
         )
 
-        # 5. Send done event
+        # 5. Send done event with final message ID
         done_payload = {
             "type": "done",
             "message_id": asst_msg_record["id"],
@@ -597,6 +600,7 @@ async def chat_stream(request: ChatRequest):
         yield f"data: {json.dumps(done_payload)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 
 
 @app.post("/analyze-image")

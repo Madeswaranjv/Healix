@@ -275,6 +275,8 @@ export async function sendChatMessage({ sessionId, message, userId = 'user_defau
  * @param {boolean} [params.useWebSearch=false]
  * @param {string} [params.model]
  * @param {Function} [params.onMetadata] - ({ sources, isEmergency, chunksUsed }) => void
+ * @param {Function} [params.onToolCall] - ({ name, arguments }) => void
+ * @param {Function} [params.onToolResult] - ({ name, sources, count }) => void
  * @param {Function} [params.onDelta] - (deltaText) => void
  * @param {Function} [params.onDone] - ({ messageId }) => void
  * @param {Function} [params.onError] - (error) => void
@@ -287,6 +289,8 @@ export async function streamChatMessage({
   useWebSearch = false,
   model = null,
   onMetadata,
+  onToolCall,
+  onToolResult,
   onDelta,
   onDone,
   onError,
@@ -336,6 +340,17 @@ export async function streamChatMessage({
               sources: event.sources || [],
               isEmergency: Boolean(event.is_emergency),
               chunksUsed: event.chunks_used || 0,
+            });
+          } else if (event.type === 'tool_call') {
+            onToolCall?.({
+              name: event.name,
+              arguments: event.arguments || {},
+            });
+          } else if (event.type === 'tool_result') {
+            onToolResult?.({
+              name: event.name,
+              sources: event.sources || [],
+              count: event.count || 0,
             });
           } else if (event.type === 'delta') {
             onDelta?.(event.content || '');

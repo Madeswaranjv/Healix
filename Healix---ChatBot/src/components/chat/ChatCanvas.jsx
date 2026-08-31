@@ -42,6 +42,7 @@ export default function ChatCanvas() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [toolStatus, setToolStatus] = useState(null);
   const titleInputRef = useRef(null);
   const abortControllerRef = useRef(null);
   const tickerRef = useRef(null);
@@ -96,6 +97,7 @@ export default function ChatCanvas() {
     }
     setIsGenerating(false);
     setIsTyping(false);
+    setToolStatus(null);
     if (currentMsgIdRef.current && activeConversationId) {
       updateMessage(activeConversationId, currentMsgIdRef.current, {
         isStreaming: false,
@@ -106,6 +108,7 @@ export default function ChatCanvas() {
   const handleSendMessage = async (payload) => {
     let text = '';
     let attachments = [];
+    setToolStatus(null);
 
     if (typeof payload === 'string') {
       text = payload.trim();
@@ -290,6 +293,20 @@ export default function ChatCanvas() {
         onMetadata: (meta) => {
           metadataObj = { ...metadataObj, ...meta };
         },
+        onToolCall: (tc) => {
+          setToolStatus({ type: 'tool_call', ...tc });
+        },
+        onToolResult: (tr) => {
+          setToolStatus({ type: 'tool_result', ...tr });
+          if (tr.sources && tr.sources.length > 0) {
+            metadataObj.sources = [...metadataObj.sources, ...tr.sources];
+            if (hasStarted) {
+              updateMessage(targetConvId, asstMsgId, {
+                sources: metadataObj.sources,
+              });
+            }
+          }
+        },
         onDelta: (chunk) => {
           pendingBuffer += chunk;
           startDrainTicker();
@@ -297,9 +314,11 @@ export default function ChatCanvas() {
         onDone: ({ messageId }) => {
           finalMessageId = messageId;
           isNetworkDone = true;
+          setToolStatus(null);
           startDrainTicker();
         },
         onError: (err) => {
+          setToolStatus(null);
           if (err.name === 'AbortError') {
             console.log('Stream stopped by user.');
             return;
@@ -367,42 +386,10 @@ export default function ChatCanvas() {
     handleSendMessage(newText);
   };
 
-  // No active conversation — show empty state
-  if (!activeConversationId) {
-    return (
-      <div className="flex-1 flex flex-col bg-canvas min-h-screen">
-        {/* Mobile menu button */}
-        <div className="lg:hidden flex items-center px-4 py-3 border-b border-border bg-surface">
-          <IconButton
-            icon={Menu}
-            label="Open menu"
-            onClick={() => setMobileSidebarOpen(true)}
-          />
-          <div className="ml-2.5 flex items-center gap-2">
-            <img src="/logo.png" alt="Healix" className="w-6 h-6 object-contain" />
-            <span className="text-lg font-semibold text-ink tracking-tight">Healix</span>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-center justify-center px-4 mt-[30vh]">
-          <EmptyState onPromptSelect={handlePromptSelect} />
-        </div>
-        <div className="w-full max-w-[760px] mx-auto px-4 lg:px-0 pt-4 pb-6">
-          <Composer
-            onSend={handleSendMessage}
-            onStop={handleStop}
-            isGenerating={isGenerating}
-          />
-        </div>
-        <div className="flex-1"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 flex flex-col bg-canvas min-h-screen">
+    <div className="flex-1 flex flex-col bg-canvas h-screen max-h-screen overflow-hidden">
       {/* Header — minimal single row with editable title */}
-      <header className="sticky top-0 z-20 bg-canvas/80 backdrop-blur-sm border-b border-border">
+      <header className="flex-shrink-0 z-20 bg-canvas/80 backdrop-blur-sm border-b border-border">
         <div className="max-w-[760px] mx-auto px-4 lg:px-0 py-3 flex items-center gap-3">
           {/* Mobile menu button */}
           <div className="lg:hidden">
@@ -413,8 +400,12 @@ export default function ChatCanvas() {
             />
           </div>
 
-          {/* Editable title */}
-          {editingTitle ? (
+          {!activeConversationId ? (
+            <div className="flex items-center gap-2">
+              <img src="/logo.png" alt="Healix" className="w-5 h-5 object-contain" />
+              <span className="text-base font-semibold text-ink tracking-tight">New Consultation</span>
+            </div>
+          ) : editingTitle ? (
             <input
               ref={titleInputRef}
               type="text"
@@ -453,42 +444,43 @@ export default function ChatCanvas() {
         </div>
       </header>
 
-      {/* Scrollable area containing messages and composer */}
-      <div className="flex-1 overflow-y-auto flex flex-col">
-        <div className="max-w-[760px] w-full mx-auto px-4 lg:px-0">
+      {/* Scrollable messages area — ONLY this container scrolls */}
+      <main className="flex-1 overflow-y-auto min-h-0 relative">
+        <div className="max-w-[760px] w-full mx-auto px-4 lg:px-0 flex flex-col min-h-full">
           {activeMessages.length === 0 ? (
-            <div className="flex items-center justify-center mt-[30vh]">
+            <div className="flex-1 flex items-center justify-center py-12">
               <EmptyState onPromptSelect={handlePromptSelect} />
             </div>
           ) : (
-            <div className="pb-4">
+            <div className="flex-1 py-4">
               <MessageList
                 messages={activeMessages}
                 onResend={handleSendMessage}
                 onEdit={handleEditAndResend}
               />
+              {/* Pulse-line typing indicator inside scrollable chat so it flows under the latest message */}
+              {isTyping && (
+                <div className="py-2">
+                  <PulseIndicator isWebSearch={useWebSearch} toolStatus={toolStatus} />
+                </div>
+              )}
             </div>
           )}
-
-          {/* Pulse-line typing indicator */}
-          {isTyping && (
-            <div className="py-4">
-              <PulseIndicator isWebSearch={useWebSearch} />
-            </div>
-          )}
-
-          {/* Composer + Disclaimer — directly under messages */}
-          <div className="pt-4 pb-6">
-            <Composer
-              onSend={handleSendMessage}
-              onStop={handleStop}
-              isGenerating={isGenerating}
-            />
-            {activeMessages.length > 1 && <DisclaimerStrip />}
-          </div>
         </div>
-        <div className="flex-1"></div>
-      </div>
+      </main>
+
+      {/* Fixed / Pinned Input Area — ALWAYS present at bottom */}
+      <footer className="flex-shrink-0 z-20 bg-canvas/95 backdrop-blur-md border-t border-border/40 pt-3 pb-4">
+        <div className="max-w-[760px] w-full mx-auto px-4 lg:px-0">
+          <Composer
+            onSend={handleSendMessage}
+            onStop={handleStop}
+            isGenerating={isGenerating}
+          />
+          {/* Disclaimer — only visible on a new chat before prompts are entered */}
+          {activeMessages.length === 0 && <DisclaimerStrip />}
+        </div>
+      </footer>
     </div>
   );
 }
