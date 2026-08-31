@@ -146,18 +146,21 @@ export default function ChatCanvas() {
       }
     }
 
-    // Compose user message representation
-    let userDisplayContent = text;
-    if (attachments.length > 0) {
-      const fileNames = attachments.map((a) => `📎 ${a.name}`).join(', ');
-      userDisplayContent = text ? `${text}\n\n*Attached: ${fileNames}*` : `*Attached files: ${fileNames}*`;
-    }
+    // Process attachments for rich visual rendering
+    const processedAttachments = attachments.map((a) => ({
+      id: a.id || Math.random().toString(36).substring(2, 9),
+      name: a.name,
+      type: a.type,
+      isImage: a.isImage || (a.file && a.file.type && a.file.type.startsWith('image/')),
+      url: a.url || (a.file ? URL.createObjectURL(a.file) : null),
+    }));
 
-    // Add user message to local state
+    // Add user message to local state with rich attachments
     const userMsg = {
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: userDisplayContent,
+      content: text || '',
+      attachments: processedAttachments,
       timestamp: Date.now(),
     };
     addMessage(targetConvId, userMsg);

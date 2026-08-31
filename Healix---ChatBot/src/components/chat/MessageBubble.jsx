@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, RotateCcw, Pencil, X } from 'lucide-react';
+import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2 } from 'lucide-react';
 import SourceChips from './SourceChips';
 
 /**
@@ -283,6 +283,8 @@ export default function MessageBubble({ message, onResend, onEdit }) {
   const isUser = role === 'user';
 
   const [copied, setCopied] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [shared, setShared] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(content);
 
@@ -293,6 +295,35 @@ export default function MessageBubble({ message, onResend, onEdit }) {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.warn('Clipboard copy failed:', err);
+    }
+  };
+
+  const handleLike = () => {
+    setLiked((prev) => !prev);
+  };
+
+  const handleShare = async () => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Healix Health Consultation',
+          text: content,
+        });
+      } else {
+        await navigator.clipboard.writeText(content);
+        setShared(true);
+        setTimeout(() => setShared(false), 2000);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        try {
+          await navigator.clipboard.writeText(content);
+          setShared(true);
+          setTimeout(() => setShared(false), 2000);
+        } catch (copyErr) {
+          console.warn('Share copy fallback failed:', copyErr);
+        }
+      }
     }
   };
 
@@ -366,14 +397,77 @@ export default function MessageBubble({ message, onResend, onEdit }) {
             <div
               className={`
                 ${isUser
-                  ? 'bg-accent-soft rounded-2xl rounded-br-md px-4 py-3'
+                  ? 'bg-accent-soft rounded-2xl rounded-br-md p-3 sm:px-4 sm:py-3'
                   : ''
                 }
               `}
             >
-              <div className={isUser ? 'text-sm text-ink leading-relaxed whitespace-pre-wrap' : 'text-ink'}>
-                {isUser ? content : renderMarkdown(content)}
-              </div>
+              {/* User Attachments Preview (Rendered visually ABOVE the text) */}
+              {isUser && message.attachments && message.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {message.attachments.map((att, idx) => {
+                    const isImg = att.isImage || (att.url && /\.(jpe?g|png|gif|webp|svg|bmp)/i.test(att.name || att.url));
+                    return isImg ? (
+                      <div
+                        key={att.id || idx}
+                        className="
+                          relative rounded-xl overflow-hidden
+                          border border-border/70 bg-surface/90
+                          shadow-sm group/img cursor-pointer
+                          max-w-[280px] max-h-[220px]
+                        "
+                        onClick={() => att.url && window.open(att.url, '_blank')}
+                        title="Click to view full image"
+                      >
+                        <img
+                          src={att.url}
+                          alt={att.name || 'Attached Image'}
+                          className="w-full h-full object-cover max-h-[200px] rounded-xl transition-transform duration-200 group-hover/img:scale-[1.02]"
+                        />
+                        {att.name && (
+                          <div className="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur-sm text-white px-2 py-0.5 text-[10px] truncate flex items-center justify-between">
+                            <span className="truncate">{att.name}</span>
+                            <ExternalLink size={10} className="ml-1 opacity-80 flex-shrink-0" />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        key={att.id || idx}
+                        className="
+                          flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                          bg-surface border border-border text-xs text-ink font-medium shadow-sm
+                        "
+                      >
+                        <FileText size={14} className="text-primary flex-shrink-0" />
+                        <span className="truncate max-w-[200px]">{att.name}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* User prompt text or Assistant formatted content */}
+              {isUser ? (
+                (() => {
+                  let userText = content || '';
+                  if (message.attachments && message.attachments.length > 0) {
+                    userText = userText
+                      .replace(/\n*\*Attached:\s*📎[^*]*\*/gi, '')
+                      .replace(/\n*\*Attached files:[^*]*\*/gi, '')
+                      .trim();
+                  }
+                  return userText ? (
+                    <div className="text-sm text-ink leading-relaxed whitespace-pre-wrap">
+                      {userText}
+                    </div>
+                  ) : null;
+                })()
+              ) : (
+                <div className="text-ink">
+                  {renderMarkdown(content)}
+                </div>
+              )}
             </div>
           )}
 
@@ -401,20 +495,40 @@ export default function MessageBubble({ message, onResend, onEdit }) {
                 <div className={`flex items-center gap-0.5 transition-opacity duration-150 ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                   <button
                     onClick={handleCopy}
-                    className="p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
-                    title={copied ? "Copied!" : "Copy prompt"}
+                    className="relative group/btn p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
                     aria-label="Copy prompt"
                   >
                     {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                    <span className="
+                      absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                      px-2 py-0.5 rounded-md
+                      bg-ink text-canvas text-[10px] font-medium
+                      shadow-md pointer-events-none whitespace-nowrap
+                      opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                      transition-all duration-150 z-30
+                    ">
+                      {copied ? 'Copied!' : 'Copy'}
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                    </span>
                   </button>
 
                   <button
                     onClick={() => onResend?.(content)}
-                    className="p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
-                    title="Re-enter same prompt"
+                    className="relative group/btn p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
                     aria-label="Re-enter same prompt"
                   >
                     <RotateCcw size={13} />
+                    <span className="
+                      absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                      px-2 py-0.5 rounded-md
+                      bg-ink text-canvas text-[10px] font-medium
+                      shadow-md pointer-events-none whitespace-nowrap
+                      opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                      transition-all duration-150 z-30
+                    ">
+                      Retry
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                    </span>
                   </button>
 
                   <button
@@ -422,37 +536,93 @@ export default function MessageBubble({ message, onResend, onEdit }) {
                       setEditText(content);
                       setIsEditing(true);
                     }}
-                    className="p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
-                    title="Edit prompt"
+                    className="relative group/btn p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"
                     aria-label="Edit prompt"
                   >
                     <Pencil size={13} />
+                    <span className="
+                      absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                      px-2 py-0.5 rounded-md
+                      bg-ink text-canvas text-[10px] font-medium
+                      shadow-md pointer-events-none whitespace-nowrap
+                      opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                      transition-all duration-150 z-30
+                    ">
+                      Edit
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                    </span>
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2 mt-1">
-                {/* Assistant Action: Copy Icon with feedback */}
+              <div className="flex items-center gap-1 mt-1.5">
+                {/* Assistant Action: Copy Button with floating tooltip */}
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors cursor-pointer text-xs"
-                  title={copied ? "Copied to clipboard!" : "Copy response"}
+                  className="relative group/btn p-1.5 rounded-lg text-muted hover:text-ink hover:bg-border/40 transition-colors cursor-pointer flex items-center justify-center"
                   aria-label="Copy response"
                 >
-                  {copied ? (
-                    <>
-                      <Check size={13} className="text-emerald-500" />
-                      <span className="text-[11px] text-emerald-600 font-medium">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy size={13} />
-                      <span className="text-[11px] text-muted opacity-0 group-hover:opacity-100 transition-opacity">Copy</span>
-                    </>
-                  )}
+                  {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+                  <span className="
+                    absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                    px-2 py-0.5 rounded-md
+                    bg-ink text-canvas text-[10px] font-medium
+                    shadow-md pointer-events-none whitespace-nowrap
+                    opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                    transition-all duration-150 z-30
+                  ">
+                    {copied ? 'Copied!' : 'Copy'}
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                  </span>
                 </button>
 
-                <span className="font-mono text-[11px] text-muted">
+                {/* Assistant Action: Like Button with floating tooltip */}
+                <button
+                  onClick={handleLike}
+                  className={`
+                    relative group/btn p-1.5 rounded-lg transition-colors cursor-pointer flex items-center justify-center
+                    ${liked
+                      ? 'text-primary bg-primary/10'
+                      : 'text-muted hover:text-ink hover:bg-border/40'
+                    }
+                  `}
+                  aria-label="Like response"
+                >
+                  <ThumbsUp size={13} className={liked ? "fill-primary text-primary" : ""} />
+                  <span className="
+                    absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                    px-2 py-0.5 rounded-md
+                    bg-ink text-canvas text-[10px] font-medium
+                    shadow-md pointer-events-none whitespace-nowrap
+                    opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                    transition-all duration-150 z-30
+                  ">
+                    {liked ? 'Liked' : 'Like'}
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                  </span>
+                </button>
+
+                {/* Assistant Action: Share Button with floating tooltip */}
+                <button
+                  onClick={handleShare}
+                  className="relative group/btn p-1.5 rounded-lg text-muted hover:text-ink hover:bg-border/40 transition-colors cursor-pointer flex items-center justify-center"
+                  aria-label="Share response"
+                >
+                  {shared ? <Check size={13} className="text-emerald-500" /> : <Share2 size={13} />}
+                  <span className="
+                    absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2
+                    px-2 py-0.5 rounded-md
+                    bg-ink text-canvas text-[10px] font-medium
+                    shadow-md pointer-events-none whitespace-nowrap
+                    opacity-0 translate-y-1 group-hover/btn:opacity-100 group-hover/btn:translate-y-0
+                    transition-all duration-150 z-30
+                  ">
+                    {shared ? 'Shared!' : 'Share'}
+                    <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-0.5 border-4 border-transparent border-t-ink" />
+                  </span>
+                </button>
+
+                <span className="font-mono text-[11px] text-muted ml-1.5">
                   {formatTimestamp(timestamp)}
                 </span>
               </div>

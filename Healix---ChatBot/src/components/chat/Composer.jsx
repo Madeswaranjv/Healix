@@ -76,6 +76,98 @@ export default function Composer({ onSend, onStop, isGenerating = false, disable
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [value]);
 
+  // Handle pasting images, files, and text from clipboard
+  const handlePaste = (e) => {
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+
+    const items = clipboardData.items;
+    const files = clipboardData.files;
+    const newAttachments = [];
+
+    if (items && items.length > 0) {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) {
+            const isImage = file.type.startsWith('image/');
+            const ext = isImage ? (file.type.split('/')[1] || 'png') : 'file';
+            const name = file.name && file.name !== 'image.png'
+              ? file.name
+              : (isImage ? `pasted-image-${Date.now()}.${ext}` : file.name || `pasted-file-${Date.now()}`);
+
+            newAttachments.push({
+              id: Math.random().toString(36).substring(2, 9),
+              file,
+              name,
+              type: file.type,
+              isImage,
+              url: isImage ? URL.createObjectURL(file) : null,
+            });
+          }
+        }
+      }
+    } else if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const isImage = file.type.startsWith('image/');
+        newAttachments.push({
+          id: Math.random().toString(36).substring(2, 9),
+          file,
+          name: file.name || `attachment-${i + 1}`,
+          type: file.type,
+          isImage,
+          url: isImage ? URL.createObjectURL(file) : null,
+        });
+      }
+    }
+
+    if (newAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...newAttachments]);
+      // If only files/images were pasted, prevent pasting default junk text
+      const textData = clipboardData.getData('text/plain');
+      if (!textData) {
+        e.preventDefault();
+      }
+    }
+  };
+
+  // Drag and drop handlers
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    const files = Array.from(e.dataTransfer.files || []);
+    if (!files.length) return;
+
+    const newAttachments = files.map((file) => ({
+      id: Math.random().toString(36).substring(2, 9),
+      file,
+      name: file.name,
+      type: file.type,
+      isImage: file.type.startsWith('image/'),
+      url: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+    }));
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
   const handleSubmit = () => {
     const text = value.trim();
     if ((!text && attachments.length === 0) || disabled || isGenerating) return;
@@ -160,19 +252,25 @@ export default function Composer({ onSend, onStop, isGenerating = false, disable
       )}
 
       {/* Input Bar */}
-      <div className="
-        flex flex-col gap-2
-        bg-input border border-inputborder rounded-xl
-        px-3 py-2
-        transition-colors duration-150
-        focus-within:border-primary
-      ">
+      <div 
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`
+          flex flex-col gap-2
+          bg-input border ${isDraggingOver ? 'border-primary ring-2 ring-primary/30' : 'border-inputborder'} rounded-xl
+          px-3 py-2
+          transition-all duration-150
+          focus-within:border-primary
+        `}
+      >
       {/* Textarea (Top Row) */}
       <textarea
         ref={textareaRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         placeholder={attachments.length > 0 ? "Ask a question about your attached files/images..." : "Ask for Medical related queries..."}
         disabled={disabled}
         autoFocus={!disabled}

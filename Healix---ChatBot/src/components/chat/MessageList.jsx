@@ -3,17 +3,23 @@ import MessageBubble from './MessageBubble';
 
 /**
  * Scrollable message list with aria-live region for new assistant messages.
- * Auto-scrolls to bottom on new messages.
+ * Only scrolls when a new user message is submitted, never auto-jumps during LLM streaming.
  */
 export default function MessageList({ messages, onResend, onEdit }) {
   const bottomRef = useRef(null);
   const containerRef = useRef(null);
+  const prevCountRef = useRef(messages.length);
 
-  // Auto-scroll to bottom on new messages and streaming token deltas
-  const latestContent = messages.length > 0 ? messages[messages.length - 1].content : '';
+  // Scroll only when a new user prompt is submitted, not on streaming deltas
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, latestContent]);
+    if (messages.length > prevCountRef.current) {
+      const latestMsg = messages[messages.length - 1];
+      if (latestMsg?.role === 'user') {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+    prevCountRef.current = messages.length;
+  }, [messages.length]);
 
   return (
     <div ref={containerRef} className="py-6 space-y-1">
