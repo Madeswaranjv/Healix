@@ -76,9 +76,10 @@ export default function ModelSelector() {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-2 w-48 flyout-menu animate-in fade-in zoom-in-95 duration-100 z-50">
+        <div className="absolute bottom-full right-0 mb-2 w-52 max-w-[85vw] flyout-menu animate-in fade-in zoom-in-95 duration-100 z-50 max-h-[70vh] overflow-y-auto">
           {MODELS.map((model) => {
             const hasSubmenu = model.options.length > 0;
+            const isSubmenuActive = openSubmenu === model.name;
             
             return (
               <div 
@@ -88,29 +89,36 @@ export default function ModelSelector() {
                 onMouseLeave={() => setOpenSubmenu(null)}
               >
                 <button 
-                  className="flyout-item justify-between"
+                  className={`flyout-item justify-between ${isSubmenuActive ? 'bg-sidebar-icon-hover text-ink' : ''}`}
                   onClick={() => {
-                    if (!hasSubmenu) {
+                    if (hasSubmenu) {
+                      setOpenSubmenu(isSubmenuActive ? null : model.name);
+                    } else {
                       handleSelect(model.name);
                     }
                   }}
                 >
-                  <span>{model.name}</span>
-                  {hasSubmenu && <ChevronRight size={14} className="text-muted" />}
+                  <span className="truncate">{model.name}</span>
+                  {hasSubmenu && (
+                    <ChevronRight 
+                      size={14} 
+                      className={`text-muted transition-transform duration-150 ${isSubmenuActive ? 'rotate-90 sm:rotate-0' : ''}`} 
+                    />
+                  )}
                   {!hasSubmenu && selectedModel === model.name && <Check size={14} className="text-primary" />}
                 </button>
                 
-                {/* Submenu */}
-                {hasSubmenu && openSubmenu === model.name && (
-                  <div className="absolute bottom-0 right-full mr-[1px] z-50">
-                    <div className="w-48 flyout-menu py-1 animate-in fade-in zoom-in-95 duration-100">
+                {/* Submenu — on desktop flyout leftwards, on mobile clean nested accordion */}
+                {hasSubmenu && isSubmenuActive && (
+                  <div className="sm:absolute sm:bottom-0 sm:right-full sm:mr-1 z-50">
+                    <div className="sm:w-48 flyout-menu py-1 animate-in fade-in zoom-in-95 duration-100 bg-surface/95 border-l-2 border-primary/40 sm:border-l sm:border sm:border-inputborder pl-2 sm:pl-0 my-1 sm:my-0">
                       {model.options.map((opt) => (
                         <button 
                           key={opt}
-                          className="flyout-item justify-between"
+                          className="flyout-item justify-between text-xs sm:text-sm"
                           onClick={() => handleSelect(opt)}
                         >
-                          <span>{opt}</span>
+                          <span className="truncate">{opt}</span>
                           {selectedModel === opt && <Check size={14} className="text-primary" />}
                         </button>
                       ))}

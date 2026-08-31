@@ -491,8 +491,8 @@ export default function MessageBubble({ message, onResend, onEdit }) {
                   {formatTimestamp(timestamp)}
                 </span>
 
-                {/* User Action Icons: visible only on hover */}
-                <div className={`flex items-center gap-0.5 transition-opacity duration-150 ${copied ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                {/* User Action Icons: visible on mobile touch, visible on hover on desktop */}
+                <div className={`flex items-center gap-0.5 transition-opacity duration-150 ${copied ? 'opacity-100' : 'opacity-80 sm:opacity-0 sm:group-hover:opacity-100'}`}>
                   <button
                     onClick={handleCopy}
                     className="relative group/btn p-1 rounded-md text-muted hover:text-ink hover:bg-border/40 transition-colors"

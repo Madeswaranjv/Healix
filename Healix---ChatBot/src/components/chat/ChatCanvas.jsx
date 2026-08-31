@@ -390,10 +390,10 @@ export default function ChatCanvas() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-canvas h-screen max-h-screen overflow-hidden">
+    <div className="flex-1 flex flex-col bg-canvas h-[100dvh] max-h-[100dvh] overflow-hidden">
       {/* Header — minimal single row with editable title */}
       <header className="flex-shrink-0 z-20 bg-canvas/80 backdrop-blur-sm border-b border-border">
-        <div className="max-w-[760px] mx-auto px-4 lg:px-0 py-3 flex items-center gap-3">
+        <div className="max-w-[760px] mx-auto px-3 sm:px-4 lg:px-0 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3">
           {/* Mobile menu button */}
           <div className="lg:hidden">
             <IconButton
@@ -449,13 +449,13 @@ export default function ChatCanvas() {
 
       {/* Scrollable messages area — ONLY this container scrolls */}
       <main className="flex-1 overflow-y-auto min-h-0 relative">
-        <div className="max-w-[760px] w-full mx-auto px-4 lg:px-0 flex flex-col min-h-full">
+        <div className="max-w-[760px] w-full mx-auto px-3 sm:px-4 lg:px-0 flex flex-col min-h-full">
           {activeMessages.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center py-12">
+            <div className="flex-1 flex items-center justify-center py-8 sm:py-12">
               <EmptyState onPromptSelect={handlePromptSelect} />
             </div>
           ) : (
-            <div className="flex-1 py-4">
+            <div className="flex-1 py-3 sm:py-4">
               <MessageList
                 messages={activeMessages}
                 onResend={handleSendMessage}
@@ -473,8 +473,8 @@ export default function ChatCanvas() {
       </main>
 
       {/* Fixed / Pinned Input Area — ALWAYS present at bottom */}
-      <footer className="flex-shrink-0 z-20 bg-canvas/95 backdrop-blur-md border-t border-border/40 pt-3 pb-4">
-        <div className="max-w-[760px] w-full mx-auto px-4 lg:px-0">
+      <footer className="flex-shrink-0 z-20 bg-canvas/95 backdrop-blur-md border-t border-border/40 pt-2.5 pb-3 sm:pt-3 sm:pb-4">
+        <div className="max-w-[760px] w-full mx-auto px-3 sm:px-4 lg:px-0">
           <Composer
             onSend={handleSendMessage}
             onStop={handleStop}
