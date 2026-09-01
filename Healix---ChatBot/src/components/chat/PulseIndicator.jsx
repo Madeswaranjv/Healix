@@ -23,7 +23,10 @@ const WEB_SEARCH_PHRASES = [
   "Synthesizing live web evidence...",
 ];
 
+import { useStore } from '../../store/useStore';
+
 export default function PulseIndicator({ isWebSearch = false, toolStatus = null }) {
+  const { theme } = useStore();
   const [index, setIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
 
@@ -69,7 +72,7 @@ export default function PulseIndicator({ isWebSearch = false, toolStatus = null 
       <div className="relative flex-shrink-0 flex items-center justify-center">
         <div className="w-8 h-8 rounded-full flex items-center justify-center overflow-visible">
           <img
-            src="/logo_animation.webp"
+            src={theme === 'dark' ? '/darkanimation.webp' : '/lightanimation.webp'}
             alt="Healix AI"
             className="w-full h-full object-contain select-none pointer-events-none rounded-full"
           />

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2 } from 'lucide-react';
 import SourceChips from './SourceChips';
+import { useStore } from '../../store/useStore';
 
 /**
  * Message bubble component.
@@ -279,6 +280,7 @@ function renderMarkdown(text) {
 }
 
 export default function MessageBubble({ message, onResend, onEdit }) {
+  const { theme } = useStore();
   const { id, role, content, timestamp, sources, isStreaming } = message;
   const isUser = role === 'user';
 
@@ -343,7 +345,7 @@ export default function MessageBubble({ message, onResend, onEdit }) {
           <div className="flex-shrink-0 mt-1">
             <div className="w-6 h-6 flex items-center justify-center">
               <img
-                src="/logo.png"
+                src={theme === 'dark' ? '/logo_dark.png' : '/logo.png'}
                 alt="Healix"
                 className="w-full h-full object-contain"
               />

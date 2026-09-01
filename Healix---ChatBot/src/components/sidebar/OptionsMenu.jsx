@@ -55,7 +55,19 @@ const menuSections = [
 export default function OptionsMenu({ onClose }) {
   const [activeSection, setActiveSection] = useState(null);
   const menuRef = useRef(null);
+  const closeTimer = useRef(null);
   const { increaseFontSize, decreaseFontSize, resetFontSize, toggleFullScreen, setAboutOpen, addConversation, setActiveConversation } = useStore();
+
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      setActiveSection(null);
+    }, 300);
+  };
 
   // Close on outside click
   useEffect(() => {
@@ -65,7 +77,10 @@ export default function OptionsMenu({ onClose }) {
       }
     };
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
   }, [onClose]);
 
   // Close on Escape
@@ -116,7 +131,7 @@ export default function OptionsMenu({ onClose }) {
   return (
     <div
       ref={menuRef}
-      className="absolute top-full right-0 mt-1 z-50 flyout-menu min-w-[130px] shadow-xl border border-border/80 bg-surface rounded-xl p-1"
+      className="absolute top-full left-0 mt-1 z-50 flyout-menu"
       role="menu"
       aria-label="Application menu"
     >
@@ -124,8 +139,8 @@ export default function OptionsMenu({ onClose }) {
         <div
           key={section.label}
           className="relative"
-          onMouseEnter={() => setActiveSection(section.label)}
-          onMouseLeave={() => setActiveSection(null)}
+          onMouseEnter={() => { cancelClose(); setActiveSection(section.label); }}
+          onMouseLeave={scheduleClose}
         >
           {/* Top-level section trigger */}
           <button
@@ -141,10 +156,17 @@ export default function OptionsMenu({ onClose }) {
           {/* Submenu — appears to the right on hover */}
           {activeSection === section.label && (
             <div
-              className="absolute left-full top-0 ml-1.5 flyout-menu min-w-[220px] shadow-2xl border border-border/90 bg-surface rounded-xl p-1 z-50 animate-in fade-in zoom-in-95 duration-100"
-              role="menu"
-              aria-label={`${section.label} submenu`}
+              className="absolute left-full top-0 ml-[1px] flex z-50"
+              onMouseEnter={cancelClose}
+              onMouseLeave={scheduleClose}
             >
+              {/* Invisible bridge for diagonal mouse movement */}
+              <div className="w-2 self-stretch flex-shrink-0" />
+              <div
+                className="flyout-menu min-w-[220px] animate-in fade-in zoom-in-95 duration-100"
+                role="menu"
+                aria-label={`${section.label} submenu`}
+              >
               {section.items.map((item) => (
                 <button
                   key={item.action}
@@ -159,6 +181,7 @@ export default function OptionsMenu({ onClose }) {
                   )}
                 </button>
               ))}
+              </div>
             </div>
           )}
         </div>

@@ -391,61 +391,6 @@ export default function ChatCanvas() {
 
   return (
     <div className="flex-1 flex flex-col bg-canvas h-[100dvh] max-h-[100dvh] overflow-hidden">
-      {/* Header — minimal single row with editable title */}
-      <header className="flex-shrink-0 z-20 bg-canvas/80 backdrop-blur-sm border-b border-border">
-        <div className="max-w-[760px] mx-auto px-3 sm:px-4 lg:px-0 py-2.5 sm:py-3 flex items-center gap-2.5 sm:gap-3">
-          {/* Mobile menu button */}
-          <div className="lg:hidden">
-            <IconButton
-              icon={Menu}
-              label="Open menu"
-              onClick={() => setMobileSidebarOpen(true)}
-            />
-          </div>
-
-          {!activeConversationId ? (
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="Healix" className="w-5 h-5 object-contain" />
-              <span className="text-base font-semibold text-ink tracking-tight">New Consultation</span>
-            </div>
-          ) : editingTitle ? (
-            <input
-              ref={titleInputRef}
-              type="text"
-              value={titleValue}
-              onChange={(e) => setTitleValue(e.target.value)}
-              onBlur={handleTitleSubmit}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleTitleSubmit();
-                if (e.key === 'Escape') setEditingTitle(false);
-              }}
-              className="
-                flex-1 text-base font-semibold text-ink
-                bg-transparent border-b-2 border-primary
-                focus:outline-none
-                py-0.5
-              "
-              aria-label="Edit conversation title"
-            />
-          ) : (
-            <button
-              onClick={() => {
-                setTitleValue(activeConv?.title || '');
-                setEditingTitle(true);
-              }}
-              className="
-                text-base font-semibold text-ink
-                text-left hover:text-primary
-                transition-colors duration-150
-                truncate
-              "
-              title="Click to edit title"
-            >
-              {activeConv?.title || 'Untitled consultation'}
-            </button>
-          )}
-        </div>
-      </header>
 
       {/* Scrollable messages area — ONLY this container scrolls */}
       <main className="flex-1 overflow-y-auto min-h-0 relative">

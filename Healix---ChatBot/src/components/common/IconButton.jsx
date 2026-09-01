@@ -14,7 +14,7 @@ const IconButton = forwardRef(function IconButton(
       onClick={onClick}
       className={`
         inline-flex items-center justify-center
-        w-9 h-9 rounded-lg
+        w-7 h-7 rounded-md
         transition-colors duration-150 ease-out
         focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2
         ${

@@ -70,7 +70,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
           className="p-1 text-muted hover:text-ink active:text-ink rounded"
           aria-label="Confirm rename"
         >
-          <Check size={14} />
+          <Check size={12} />
         </button>
         <button
           onClick={() => {
@@ -80,7 +80,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
           className="p-1 text-muted hover:text-ink active:text-ink rounded"
           aria-label="Cancel rename"
         >
-          <X size={14} />
+          <X size={12} />
         </button>
       </div>
     );
@@ -103,7 +103,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
         aria-current={isActive ? 'true' : undefined}
       >
         <MessageSquare
-          size={16}
+          size={14}
           className={`flex-shrink-0 ${isActive ? 'text-primary' : 'text-muted'}`}
         />
         <span className="truncate flex-1">{conversation.title}</span>
@@ -124,7 +124,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
         "
         aria-label="Conversation options"
       >
-        <MoreVertical size={14} />
+        <MoreVertical size={12} />
       </button>
 
       {/* Dropdown menu */}
@@ -142,7 +142,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
             }}
             role="menuitem"
           >
-            <Pencil size={14} className="text-muted" />
+            <Pencil size={12} className="text-muted" />
             <span>Rename</span>
           </button>
           <button
@@ -153,7 +153,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
             }}
             role="menuitem"
           >
-            <FileDown size={14} className="text-muted" />
+            <FileDown size={12} className="text-muted" />
             <span>Export</span>
           </button>
           <div className="my-1 border-t border-border" />
@@ -165,7 +165,7 @@ export default function ChatListItem({ conversation, isActive, onSelect, onDelet
             }}
             role="menuitem"
           >
-            <Trash2 size={14} />
+            <Trash2 size={12} />
             <span>Delete</span>
           </button>
         </div>

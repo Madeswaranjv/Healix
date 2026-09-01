@@ -34,6 +34,7 @@ export default function ModelSelector() {
   const [isOpen, setIsOpen] = useState(false);
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const menuRef = useRef(null);
+  const closeTimer = useRef(null);
 
   // Close menu on outside click
   useEffect(() => {
@@ -46,10 +47,30 @@ export default function ModelSelector() {
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
   }, [isOpen]);
 
+  // Cancel any pending close
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  // Delay closing so diagonal mouse movement toward the submenu doesn't dismiss it
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      setOpenSubmenu(null);
+    }, 300);
+  };
+
   const handleSelect = (modelName) => {
+    cancelClose();
     setSelectedModel(modelName);
     setIsOpen(false);
     setOpenSubmenu(null);
@@ -76,7 +97,7 @@ export default function ModelSelector() {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute bottom-full right-0 mb-2 w-52 max-w-[85vw] flyout-menu animate-in fade-in zoom-in-95 duration-100 z-50 max-h-[70vh] overflow-y-auto">
+        <div className="absolute bottom-full right-0 mb-2 w-52 max-w-[85vw] flyout-menu animate-in fade-in zoom-in-95 duration-100 z-50 max-h-[70vh]">
           {MODELS.map((model) => {
             const hasSubmenu = model.options.length > 0;
             const isSubmenuActive = openSubmenu === model.name;
@@ -85,8 +106,11 @@ export default function ModelSelector() {
               <div 
                 key={model.name}
                 className="relative"
-                onMouseEnter={() => setOpenSubmenu(model.name)}
-                onMouseLeave={() => setOpenSubmenu(null)}
+                onMouseEnter={() => {
+                  cancelClose();
+                  setOpenSubmenu(model.name);
+                }}
+                onMouseLeave={scheduleClose}
               >
                 <button 
                   className={`flyout-item justify-between ${isSubmenuActive ? 'bg-sidebar-icon-hover text-ink' : ''}`}
@@ -102,20 +126,31 @@ export default function ModelSelector() {
                   {hasSubmenu && (
                     <ChevronRight 
                       size={14} 
-                      className={`text-muted transition-transform duration-150 ${isSubmenuActive ? 'rotate-90 sm:rotate-0' : ''}`} 
+                      className="text-muted transition-transform duration-150" 
                     />
                   )}
                   {!hasSubmenu && selectedModel === model.name && <Check size={14} className="text-primary" />}
                 </button>
                 
-                {/* Submenu — on desktop flyout leftwards, on mobile clean nested accordion */}
+                {/* Submenu — flies out to the right */}
                 {hasSubmenu && isSubmenuActive && (
-                  <div className="sm:absolute sm:bottom-0 sm:right-full sm:mr-1 z-50">
-                    <div className="sm:w-48 flyout-menu py-1 animate-in fade-in zoom-in-95 duration-100 bg-surface/95 border-l-2 border-primary/40 sm:border-l sm:border sm:border-inputborder pl-2 sm:pl-0 my-1 sm:my-0">
+                  <div
+                    className="absolute top-0 left-full z-50 flex"
+                    onMouseEnter={cancelClose}
+                    onMouseLeave={scheduleClose}
+                  >
+                    {/*
+                      Invisible bridge: a transparent strip that fills the
+                      gap between the parent row and the submenu panel.
+                      Mouse entering it cancels the close timer, keeping
+                      the submenu alive during slow diagonal movement.
+                    */}
+                    <div className="w-2 self-stretch flex-shrink-0" />
+                    <div className="w-48 flyout-menu animate-in fade-in zoom-in-95 duration-100">
                       {model.options.map((opt) => (
-                        <button 
+                        <button
                           key={opt}
-                          className="flyout-item justify-between text-xs sm:text-sm"
+                          className="flyout-item justify-between"
                           onClick={() => handleSelect(opt)}
                         >
                           <span className="truncate">{opt}</span>

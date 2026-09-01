@@ -1,77 +1,38 @@
-# ==============================================================================
-# Healix AI Healthcare Assistant — .gitignore
-# ==============================================================================
-
-# Environment Variables & Secrets (CRITICAL: Never commit API keys)
-.env
-.env.*
-!.env.example
-*.env
-
-# Python Virtual Environments & Packages
-venv/
-env/
-ENV/
-.venv/
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+# Python
+backend/venv/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/core/__pycache__/
+backend/app/services/__pycache__/
+backend/app/api/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
 *.egg-info/
-.installed.cfg
-*.egg
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Local SQLite & Vector Databases
-backend/data/
-*.db
-*.sqlite
-*.sqlite3
-data/vectorstore/
-chroma/
-vectorstore/
-
-# Node.js & Frontend Build Outputs
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+.eggs/
 dist/
-dist-ssr/
-*.local
-.vite/
-.output/
+build/
 
-# IDE & Editor Configurations
-.vscode/
-.idea/
-*.swp
-*.swo
-*.sublime-project
-*.sublime-workspace
+# Environment variables — never commit secrets
+backend/.env
+.env
+.env.local
+.env.*.local
+
+# Node
+Healix---ChatBot/node_modules/
+node_modules/
+
+# Vite build output
+Healix---ChatBot/dist/
+
+# Misc
+dist/
+sidebar/
+*.log
 .DS_Store
 Thumbs.db
-ehthumbs.db
 
-# Temporary Logs & System Cache
-*.log
-logs/
-scratch/
-.system_generated/
+# Data files
+backend/data/

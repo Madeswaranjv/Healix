@@ -24,6 +24,7 @@ HEALTHCARE_SYSTEM_PROMPT = """You are Healix, an advanced, compassionate, accura
 8. FORMATTING & TONE:
    - Use clean markdown with structured tables, bullet points, and bold highlights for readability.
    - Speak in an empathetic, calm, and professional tone.
+   - Strictly NO EMOJIS allowed in any response.
 """
 
 VISION_ANALYSIS_SYSTEM_PROMPT = """You are Healix Vision, a healthcare image inspection assistant.
@@ -33,6 +34,7 @@ VISION_ANALYSIS_SYSTEM_PROMPT = """You are Healix Vision, a healthcare image ins
 2. Highlight visible patterns, key indicators, textual values, or areas of interest.
 3. STRICT SAFETY REQUIREMENT: You MUST NOT provide a definitive diagnosis or medical prescription based on the image. Image quality, lighting, and lack of clinical context make definitive diagnosis unsafe.
 4. Conclude with a recommendation for clinical in-person examination or professional review by a licensed dermatologist, radiologist, or medical doctor.
+5. NO EMOJIS: Strictly no emojis allowed in any response.
 """
 
 def build_chat_prompt(

@@ -17,7 +17,6 @@ import { useStore } from '../../store/useStore';
 export function Sidebar() {
   const {
     isSidebarOpen,
-    setSidebarOpen,
     toggleSidebar,
     isSearchOpen,
     toggleSearch,
@@ -34,51 +33,17 @@ export function Sidebar() {
   } = useStore();
 
   const [isHoverOpen, setIsHoverOpen] = useState(false);
-  const hoverTimeoutRef = useRef(null);
+  const sidebarRef = useRef(null);
 
-  // True if sidebar is either toggled open OR currently peeked via hover
+  // True if sidebar should visually appear open (toggled OR hover-peeked)
   const isOpen = isSidebarOpen || isHoverOpen;
 
   const handleMouseEnter = () => {
-    if (!isSidebarOpen) {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = setTimeout(() => {
-        setIsHoverOpen(true);
-      }, 350); // 350ms hover delay
-    }
+    setIsHoverOpen(true);
   };
 
   const handleMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    if (!isSidebarOpen) {
-      setIsHoverOpen(false);
-    }
-  };
-
-  const handleToggleClick = (e) => {
-    e.stopPropagation();
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-
-    if (isOpen) {
-      if (isHoverOpen && !isSidebarOpen) {
-        // While hovering, pressing the sidebar icon locks it to STAY visible!
-        setSidebarOpen(true);
-        setIsHoverOpen(false);
-      } else {
-        // Collapses permanently
-        setSidebarOpen(false);
-        setIsHoverOpen(false);
-      }
-    } else {
-      setSidebarOpen(true);
-      setIsHoverOpen(false);
-    }
+    setIsHoverOpen(false);
   };
 
   const handleNewChat = () => {
@@ -87,83 +52,76 @@ export function Sidebar() {
 
   return (
     <aside
-      onMouseEnter={handleMouseEnter}
+      ref={sidebarRef}
       onMouseLeave={handleMouseLeave}
       className={`
-        hidden lg:flex flex-col flex-shrink-0
-        bg-surface transition-all duration-350 ease-in-out
-        relative select-none h-full z-30
-        ${isOpen ? 'w-[280px] border-r border-border' : 'w-0 border-r-0'}
+        relative z-30 h-screen bg-surface flex-shrink-0
+        hidden lg:flex flex-col
+        border-r border-border
+        transition-all duration-300 ease-out
+        ${isOpen ? 'w-[280px]' : 'w-16'}
       `}
       aria-label="Desktop navigation sidebar"
     >
-      {/* Hover Peek trigger zone along left edge when closed */}
-      {!isSidebarOpen && (
+      {/* Toggle button — positioned on the right edge */}
+      <button
+        onClick={toggleSidebar}
+        className="
+          absolute top-3.5 -right-3.5 z-50
+          flex items-center justify-center
+          w-7 h-7 rounded-full
+          border border-inputborder bg-surface
+          shadow-sm
+          text-muted hover:text-ink hover:bg-sidebar-btn-hover active:text-ink
+          hover:border-ink/50 active:border-ink focus:border-ink
+          transition-colors duration-150 ease-out
+        "
+        aria-label={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+      >
+        {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
+      </button>
+
+      {/*
+        Hover-to-peek trigger zone — only active when sidebar is collapsed.
+        Starts 49px from top (5px below the 32px toggle button at top-3)
+        so hovering on the toggle button or above it does NOT open the sidebar.
+      */}
+      {!isOpen && (
         <div
           onMouseEnter={handleMouseEnter}
-          className="absolute top-14 bottom-0 -right-6 w-8 z-40 cursor-pointer"
+          className="absolute top-[49px] bottom-0 left-0 right-0 z-20"
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar controlling toggle button — permanently anchored to boundary edge */}
-      <button
-        onClick={handleToggleClick}
-        className="
-          absolute top-5 -right-4 z-50
-          flex items-center justify-center
-          w-8 h-8 rounded-full
-          border border-border bg-surface
-          shadow-sm cursor-pointer
-          text-muted hover:text-primary hover:bg-accent-soft
-          hover:border-primary active:border-primary focus:border-primary
-          transition-colors duration-150 ease-out
-        "
-        aria-label={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-        title={isOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-      >
-        {isOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
-      </button>
-
       {/* Inner wrapper: overflow-visible when open so submenus float over canvas; overflow-hidden when closed */}
-      <div className={`w-full h-full ${isOpen ? 'overflow-visible' : 'overflow-hidden'} transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`w-full h-full ${isOpen ? 'overflow-visible' : 'overflow-hidden'} transition-opacity ${isOpen ? 'opacity-100 duration-200 delay-[300ms]' : 'opacity-0 duration-100 delay-100 pointer-events-none'}`}>
         <div className="flex flex-col h-full w-[280px] min-w-[280px]">
-          {/* Top Header */}
-          <div className="flex items-center justify-between p-3.5 pb-2">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex-shrink-0 flex items-center justify-center">
-                <img
-                  src="/logo.png"
-                  alt="Healix Logo"
-                  className="w-6 h-6 object-contain"
-                />
-              </div>
-              <span className="text-lg font-bold text-ink tracking-tight truncate">
-                Healix
-              </span>
+          {/* Top icon row — Menu + Search, left-aligned */}
+          <div className="flex items-center gap-0 px-4 pt-4 pb-2">
+            <div className="relative">
+              <IconButton
+                icon={Menu}
+                label="Options"
+                onClick={toggleOptions}
+                active={isOptionsOpen}
+                size={16}
+              />
+              {isOptionsOpen && (
+                <OptionsMenu onClose={() => setOptionsOpen(false)} />
+              )}
             </div>
-
-            {/* Header Action Icons */}
-            <div className="flex items-center gap-0.5 pr-2">
-              <div className="relative">
-                <IconButton
-                  icon={Search}
-                  label="Search conversations"
-                  onClick={toggleSearch}
-                  active={isSearchOpen}
-                />
-                {isSearchOpen && <SearchPanel onClose={() => setSearchOpen(false)} />}
-              </div>
-
-              <div className="relative">
-                <IconButton
-                  icon={Menu}
-                  label="Options"
-                  onClick={toggleOptions}
-                  active={isOptionsOpen}
-                />
-                {isOptionsOpen && <OptionsMenu onClose={() => setOptionsOpen(false)} />}
-              </div>
+            <div className="relative">
+              <IconButton
+                icon={Search}
+                label="Search conversations"
+                onClick={toggleSearch}
+                active={isSearchOpen}
+                size={16}
+              />
+              {isSearchOpen && (
+                <SearchPanel onClose={() => setSearchOpen(false)} />
+              )}
             </div>
           </div>
 
@@ -254,7 +212,7 @@ export function MobileSidebarDrawer() {
     <div className="fixed inset-0 z-40 lg:hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-ink/30 backdrop-blur-sm backdrop-enter"
+        className="absolute inset-0 bg-backdrop backdrop-blur-sm backdrop-enter"
         onClick={() => setMobileSidebarOpen(false)}
       />
 
@@ -269,13 +227,10 @@ export function MobileSidebarDrawer() {
       ">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="Healix" className="w-6 h-6 object-contain" />
-            <span className="text-lg font-semibold text-ink tracking-tight">Healix</span>
-          </div>
+          <span className="text-lg font-semibold text-ink tracking-tight">Healix</span>
           <IconButton
             icon={() => (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -286,13 +241,14 @@ export function MobileSidebarDrawer() {
         </div>
 
         {/* Top icons */}
-        <div className="flex items-center gap-1 px-4 pt-3 pb-2">
+        <div className="flex items-center gap-0 px-4 pt-3 pb-2">
           <div className="relative">
             <IconButton
               icon={Menu}
               label="Options"
               onClick={toggleOptions}
               active={isOptionsOpen}
+              size={16}
             />
             {isOptionsOpen && <OptionsMenu onClose={() => setOptionsOpen(false)} />}
           </div>
@@ -302,25 +258,27 @@ export function MobileSidebarDrawer() {
               label="Search conversations"
               onClick={toggleSearch}
               active={isSearchOpen}
+              size={16}
             />
             {isSearchOpen && <SearchPanel onClose={() => setSearchOpen(false)} />}
           </div>
         </div>
 
         {/* New chat button */}
-        <div className="px-4 pb-3">
+        <div className="px-3 pb-3">
           <button
             onClick={handleNewChat}
             className="
               flex items-center justify-center gap-2
-              w-full py-2.5 rounded-lg
+              w-full py-2 rounded-lg
               border border-primary text-primary
-              text-sm font-medium
+              text-xs font-semibold
               hover:bg-primary hover:text-white
               transition-colors duration-150 ease-out
             "
+            title="Start new consultation"
           >
-            <Plus size={18} />
+            <Plus size={14} />
             <span>New chat</span>
           </button>
         </div>

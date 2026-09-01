@@ -7,7 +7,7 @@ import { useStore } from '../store/useStore';
  * version number, privacy link, support contact.
  */
 export default function AboutModal() {
-  const { isAboutOpen, setAboutOpen } = useStore();
+  const { isAboutOpen, setAboutOpen, theme } = useStore();
 
   return (
     <Modal
@@ -18,7 +18,7 @@ export default function AboutModal() {
       <div className="space-y-4">
         {/* Header with logo */}
         <div className="flex items-center gap-3 pb-2 border-b border-border">
-          <img src="/logo.png" alt="Healix Logo" className="w-10 h-10 object-contain flex-shrink-0" />
+          <img src={theme === 'dark' ? '/logo_dark.png' : '/logo.png'} alt="Healix Logo" className="w-10 h-10 object-contain flex-shrink-0" />
           <div>
             <h4 className="text-base font-bold text-ink">Healix AI</h4>
             <p className="text-xs text-muted">Healthcare Intelligence Platform</p>

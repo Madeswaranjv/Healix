@@ -11,6 +11,19 @@ export default function ChatFilterMenu({ onClose }) {
   const [sortBy, setSortBy] = useState('Last activity');
   const [lastActivity, setLastActivity] = useState('All');
 
+  const closeTimer = useRef(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => {
+      setOpenSubmenu(null);
+    }, 300);
+  };
+
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -18,7 +31,10 @@ export default function ChatFilterMenu({ onClose }) {
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
   }, [onClose]);
 
   return (
@@ -31,8 +47,8 @@ export default function ChatFilterMenu({ onClose }) {
       {/* Last activity with submenu */}
       <div 
         className="relative"
-        onMouseEnter={() => setOpenSubmenu('lastActivity')}
-        onMouseLeave={() => setOpenSubmenu(null)}
+        onMouseEnter={() => { cancelClose(); setOpenSubmenu('lastActivity'); }}
+        onMouseLeave={scheduleClose}
       >
         <button className="flyout-item justify-between">
           <span>Last activity</span>
@@ -43,7 +59,13 @@ export default function ChatFilterMenu({ onClose }) {
         </button>
         
         {openSubmenu === 'lastActivity' && (
-          <div className="absolute top-0 left-full ml-[1px] z-50">
+          <div 
+            className="absolute top-0 left-full ml-[1px] z-50 flex"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            {/* Invisible bridge for diagonal mouse movement */}
+            <div className="w-2 self-stretch flex-shrink-0" />
             <div className="w-48 flyout-menu py-1 animate-in fade-in zoom-in-95 duration-100">
               {['1d', '3d', '7d', '30d', 'All'].map((opt) => (
                 <button 
@@ -63,8 +85,8 @@ export default function ChatFilterMenu({ onClose }) {
       {/* Sort by with submenu */}
       <div 
         className="relative"
-        onMouseEnter={() => setOpenSubmenu('sortBy')}
-        onMouseLeave={() => setOpenSubmenu(null)}
+        onMouseEnter={() => { cancelClose(); setOpenSubmenu('sortBy'); }}
+        onMouseLeave={scheduleClose}
       >
         <button className="flyout-item justify-between">
           <span>Sort by</span>
@@ -75,7 +97,13 @@ export default function ChatFilterMenu({ onClose }) {
         </button>
         
         {openSubmenu === 'sortBy' && (
-          <div className="absolute top-0 left-full ml-[1px] z-50">
+          <div 
+            className="absolute top-0 left-full ml-[1px] z-50 flex"
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+          >
+            {/* Invisible bridge for diagonal mouse movement */}
+            <div className="w-2 self-stretch flex-shrink-0" />
             <div className="w-48 flyout-menu py-1 animate-in fade-in zoom-in-95 duration-100">
               {['Name', 'Date created', 'Last activity'].map((opt) => (
                 <button 

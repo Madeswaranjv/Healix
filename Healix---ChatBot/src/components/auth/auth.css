@@ -1,0 +1,128 @@
+/* ============================================================
+   Healix — Auth pages (Login / Signup)
+   Page-specific styles only. Relies on the design tokens and
+   utility classes already defined in the main design-system
+   stylesheet (--color-*, --font-*, --radius-*, --shadow-*, plus
+   .source-chip / .disclaimer-text / .skeleton). Import this file
+   AFTER that stylesheet.
+   ============================================================ */
+
+.auth-shell {
+  min-height: 100vh;
+  background-color: var(--color-canvas);
+}
+
+/* ---- Brand panel (left column, desktop only) ----
+   Reuses the same high-contrast "ink" surface the buttons already
+   use elsewhere in the product, so it inverts correctly in both
+   the light and dark theme without any extra rules. */
+.auth-brand {
+  position: relative;
+  background-color: var(--color-ink);
+  overflow: hidden;
+}
+
+/* A faint measurement grid — quiet nod to clinical precision,
+   not a decorative gradient wash. */
+.auth-brand::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--color-canvas) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--color-canvas) 6%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+.auth-brand > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---- Floating product-preview card inside the brand panel ---- */
+.auth-preview-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.auth-preview-question {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* ---- Password strength meter ----
+   Uses the same token palette as the rest of the app (alert /
+   primary / success) instead of ad-hoc red/amber/yellow so it
+   stays in sync with whichever theme is active. */
+.auth-strength-seg {
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--color-border);
+  transition: background-color 200ms ease-out;
+}
+
+.auth-strength-seg[data-active="1"] {
+  background-color: var(--color-alert, #ef4444);
+}
+
+.auth-strength-seg[data-active="2"] {
+  background-color: color-mix(in srgb, var(--color-alert, #ef4444) 45%, var(--color-primary) 55%);
+}
+
+.auth-strength-seg[data-active="3"] {
+  background-color: var(--color-primary);
+}
+
+.auth-strength-seg[data-active="4"] {
+  background-color: var(--color-success, #22c55e);
+}
+
+/* ---- Responsive ----
+   Below lg, the brand panel is replaced by CompactBrandHeader in
+   the JSX (hidden via lg:hidden / lg:flex Tailwind utilities);
+   this just tidies up the compact header's own spacing. */
+@media (max-width: 1023px) {
+  .auth-shell {
+    display: block;
+  }
+}
+
+/* skeleton shimmer for the preview card */
+.skeleton {
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    var(--color-surface) 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.source-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background-color: var(--color-border);
+  color: var(--color-muted);
+  border: 1px solid var(--color-border);
+}
+
+.disclaimer-text {
+  font-size: 11px;
+  color: var(--color-muted);
+  line-height: 1.4;
+  opacity: 0.8;
+}

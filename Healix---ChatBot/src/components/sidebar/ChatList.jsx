@@ -44,6 +44,7 @@ export default function ChatList({ onNavigate }) {
           label="Filter and Sort" 
           onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
           active={isFilterMenuOpen}
+          size={16}
         />
         
         {isFilterMenuOpen && (
@@ -83,7 +84,7 @@ export default function ChatList({ onNavigate }) {
                 "
               >
                 <span>View all conversations</span>
-                <ArrowRight size={14} />
+                <ArrowRight size={12} />
               </a>
             )}
           </>

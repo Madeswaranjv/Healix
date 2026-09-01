@@ -53,17 +53,6 @@ export default function ProfileMenu() {
         <span>Clinical Profile & Settings</span>
       </button>
 
-      <button
-        className="flyout-item"
-        onClick={() => {
-          setAuthModalOpen(true);
-          setProfileMenuOpen(false);
-        }}
-      >
-        <Users size={15} />
-        <span>Switch Account / Sign In</span>
-      </button>
-
       <button className="flyout-item" onClick={() => setProfileMenuOpen(false)}>
         <Languages size={15} />
         <span>Language</span>

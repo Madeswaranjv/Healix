@@ -6,7 +6,7 @@
 import { useStore } from '../../store/useStore';
 
 export default function EmptyState({ onPromptSelect }) {
-  const { userProfile } = useStore();
+  const { userProfile, theme } = useStore();
   
   const hour = new Date().getHours();
   let greeting = 'Good evening';
@@ -18,14 +18,14 @@ export default function EmptyState({ onPromptSelect }) {
       {/* Logo */}
       <div className="flex justify-center mb-5">
         <img
-          src="/logo.png"
+          src={theme === 'dark' ? '/logo_dark.png' : '/logo.png'}
           alt="Healix Logo"
-          className="w-16 h-16 object-contain animate-in fade-in zoom-in-90 duration-300"
+          className="w-12 h-12 object-contain animate-in fade-in zoom-in-90 duration-300"
         />
       </div>
 
       {/* Greeting */}
-      <h1 className="text-5xl font-bold text-ink tracking-tight mb-3">
+      <h1 className="text-4xl font-semibold text-ink tracking-tight mb-3">
         {greeting}, {userProfile?.preferredName || 'there'}
       </h1>
 

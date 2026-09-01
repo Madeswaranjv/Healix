@@ -32,9 +32,9 @@ const getStoredToken = () => {
 
 const getStoredUserId = () => {
   try {
-    return localStorage.getItem('healix_user_id') || 'user_default';
+    return localStorage.getItem('healix_user_id') || null;
   } catch {
-    return 'user_default';
+    return null;
   }
 };
 
@@ -112,8 +112,8 @@ export const useStore = create((set, get) => ({
 
   // --- Authentication & User Accounts ---
   authToken: getStoredToken(),
-  activeUserId: getStoredUserId(),
-  isAuthenticated: Boolean(getStoredToken() || getStoredUserId()),
+  activeUserId: getStoredUserId() || 'user_default',
+  isAuthenticated: Boolean(getStoredToken()),
   isAuthModalOpen: false,
   setAuthModalOpen: (open) => set({ isAuthModalOpen: open }),
   allUsers: [],
@@ -271,7 +271,7 @@ export const useStore = create((set, get) => ({
       activeConversationId: null,
       conversations: [],
       messages: {},
-      isAuthModalOpen: true,
+      isAuthModalOpen: false,
       userProfile: {
         id: 'user_default',
         fullName: 'Jane Doe, MD',
@@ -287,6 +287,9 @@ export const useStore = create((set, get) => ({
         preferences: {},
       },
     });
+
+    // Navigate to login page (route-based auth)
+    window.location.href = '/login';
   },
 
   switchUser: async (userId) => {

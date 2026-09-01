@@ -1,9 +1,144 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
-  X, User, Activity, Monitor, Database, Plus, Trash2, Check, ShieldCheck, HeartPulse
+  X, User, Activity, Monitor, Database, Plus, Trash2, Check, ShieldCheck, HeartPulse,
+  ChevronDown, ChevronUp, Search, Clock
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import IconButton from '../common/IconButton';
+
+/* ── Shared focus class for all text inputs / textareas ── */
+const INPUT_CLS =
+  'w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm ' +
+  'focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-0 focus:border-primary ' +
+  'transition-colors duration-150';
+
+const INPUT_SM_CLS =
+  'w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-sm ' +
+  'focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-0 focus:border-primary ' +
+  'transition-colors duration-150';
+
+const INPUT_XS_CLS =
+  'w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-xs ' +
+  'focus:outline-none focus:ring-1 focus:ring-primary focus:ring-offset-0 focus:border-primary ' +
+  'transition-colors duration-150';
+
+const SEARCHABLE_SETTINGS = [
+  { label: 'Full Legal Name', tab: 'general' },
+  { label: 'Preferred Name', tab: 'general' },
+  { label: 'Email Address', tab: 'general' },
+  { label: 'Age', tab: 'general' },
+  { label: 'Gender / Sex', tab: 'general' },
+  { label: 'Blood Group', tab: 'health' },
+  { label: 'Known Allergies', tab: 'health' },
+  { label: 'Chronic Health Conditions', tab: 'health' },
+  { label: 'Current Medications', tab: 'health' },
+  { label: 'Emergency Contact', tab: 'health' },
+  { label: 'Theme (Light/Dark)', tab: 'account' },
+  { label: 'Typography & Reading Size', tab: 'account' },
+  { label: 'Local Database Status', tab: 'memory' },
+];
+
+/* ── Custom flyout-style dropdown (matches ModelSelector design) ── */
+function FlyoutSelect({ value, onChange, options, className = '' }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [isOpen]);
+
+  return (
+    <div className={`relative inline-block ${className}`} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm hover:border-primary/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors duration-150"
+      >
+        <span>{value}</span>
+        <ChevronDown size={14} className="text-muted flex-shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 z-50 flyout-menu min-w-full animate-in fade-in zoom-in-95 duration-100">
+          {options.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className="flyout-item justify-between"
+              onClick={() => { onChange(opt); setIsOpen(false); }}
+            >
+              <span className="truncate">{opt}</span>
+              {value === opt && <Check size={13} className="text-primary flex-shrink-0" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Font-size stepper (12–18 px) ── */
+const MIN_FONT = 12;
+const MAX_FONT = 18;
+
+function FontSizeStepper({ fontSize, setFontSize }) {
+  const [limitMsg, setLimitMsg] = useState(null);
+
+  const change = (delta) => {
+    const next = fontSize + delta;
+    if (next < MIN_FONT || next > MAX_FONT) {
+      setLimitMsg(`Cannot change size beyond ${delta < 0 ? MIN_FONT : MAX_FONT}px`);
+      setTimeout(() => setLimitMsg(null), 1800);
+      return;
+    }
+    setFontSize(next);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-3">
+        {/* Decrease button */}
+        <button
+          type="button"
+          onClick={() => change(-1)}
+          className="group p-1.5 rounded border border-border hover:border-primary text-muted hover:text-primary active:bg-primary active:text-white transition-colors duration-100"
+          aria-label="Decrease font size"
+        >
+          <ChevronDown size={15} />
+        </button>
+
+        {/* Size badge */}
+        <span className="px-3 py-1 rounded border border-border bg-canvas text-ink text-sm font-mono min-w-[64px] text-center select-none">
+          {fontSize}px
+        </span>
+
+        {/* Increase button */}
+        <button
+          type="button"
+          onClick={() => change(1)}
+          className="group p-1.5 rounded border border-border hover:border-primary text-muted hover:text-primary active:bg-primary active:text-white transition-colors duration-100"
+          aria-label="Increase font size"
+        >
+          <ChevronUp size={15} />
+        </button>
+
+        <span className="text-xs text-muted">Range: {MIN_FONT}px – {MAX_FONT}px</span>
+      </div>
+
+      {/* Limit toast */}
+      {limitMsg && (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-alert/10 border border-alert/20 text-alert text-xs font-medium animate-in fade-in duration-150">
+          {limitMsg}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SettingsModal() {
   const {
@@ -19,8 +154,24 @@ export default function SettingsModal() {
     conversations,
   } = useStore();
 
+  // Derived values for Memory & Sessions
+  const activeConv = conversations.find(c => c.id === activeConversationId);
+  let sessionDuration = "No active session";
+  if (activeConv) {
+    const diffMs = (activeConv.updatedAt || Date.now()) - (activeConv.createdAt || Date.now());
+    const mins = Math.max(0, Math.floor(diffMs / 60000));
+    sessionDuration = mins > 0 ? `${mins} min${mins > 1 ? 's' : ''}` : "< 1 min";
+  }
+
+  // Use a mock last login time or current session start
+  const lastLogin = activeConv && activeConv.createdAt 
+    ? new Date(activeConv.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    : new Date().toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+
   const [activeTab, setActiveTab] = useState('general');
   const [isSaved, setIsSaved] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchRef = useRef(null);
 
   // Form local state
   const [formData, setFormData] = useState({
@@ -44,6 +195,18 @@ export default function SettingsModal() {
   const [allergyInput, setAllergyInput] = useState('');
   const [conditionInput, setConditionInput] = useState('');
   const [medicationInput, setMedicationInput] = useState('');
+
+  // Close search dropdown on outside click
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   if (!isSettingsModalOpen) return null;
 
@@ -82,44 +245,85 @@ export default function SettingsModal() {
 
       {/* Modal Card */}
       <div className="relative bg-surface rounded-xl shadow-2xl border border-border w-full max-w-4xl h-[650px] max-h-[92vh] flex overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        
+
         {/* Left Sidebar */}
-        <div className="w-64 bg-canvas border-r border-border flex flex-col p-4 space-y-1">
-          <div className="flex items-center gap-2 px-3 py-2 mb-2">
-            <HeartPulse className="text-primary" size={20} />
-            <h2 className="text-sm font-semibold text-ink">Preferences & Profile</h2>
+        <div className="w-50 bg-canvas border-r border-border flex flex-col p-4 space-y-1">
+
+          {/* Search Bar */}
+          <div className="relative mb-3" ref={searchRef}>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" size={14} />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-border bg-surface text-ink text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors duration-150"
+              />
+            </div>
+
+            {/* Search Dropdown */}
+            {isSearchOpen && searchQuery.trim() && (
+              <div className="absolute top-full left-0 mt-1 w-full bg-surface border border-border rounded-lg shadow-md z-50 max-h-48 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+                {SEARCHABLE_SETTINGS.filter(s => s.label.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  SEARCHABLE_SETTINGS.filter(s => s.label.toLowerCase().includes(searchQuery.toLowerCase())).map((setting, idx) => (
+                    <button
+                      key={idx}
+                      className="w-full text-left px-3 py-2 text-xs text-ink hover:bg-sidebar-icon-hover transition-colors truncate"
+                      onClick={() => {
+                        setActiveTab(setting.tab);
+                        setSearchQuery('');
+                        setIsSearchOpen(false);
+                      }}
+                    >
+                      {setting.label}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-3 py-2 text-xs text-muted">No results found</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="text-[11px] font-medium text-muted tracking-wider mb-2 px-1">
+            Settings
           </div>
 
           <button
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTab === 'general' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
+            className={`flex items-center gap-3 px-2 py-1 rounded-lg text-[13px] transition-colors duration-150 ${activeTab === 'general' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
             onClick={() => setActiveTab('general')}
           >
-            <User size={18} />
+            <User size={17} />
             <span>General</span>
           </button>
 
           <button
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTab === 'health' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
+            className={`flex items-center gap-3 px-2 py-1 rounded-lg text-[13px] transition-colors duration-150 ${activeTab === 'health' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
             onClick={() => setActiveTab('health')}
           >
-            <Activity size={18} />
+            <Activity size={17} />
             <span>Health Profile</span>
           </button>
 
           <button
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTab === 'account' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
+            className={`flex items-center gap-3 px-2 py-1 rounded-lg text-[13px] transition-colors duration-150 ${activeTab === 'account' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
             onClick={() => setActiveTab('account')}
           >
-            <Monitor size={18} />
-            <span>Appearance & App</span>
+            <Monitor size={17} />
+            <span>Appearance &amp; App</span>
           </button>
 
           <button
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${activeTab === 'memory' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
+            className={`flex items-center gap-3 px-2 py-1 rounded-lg text-[13px] transition-colors duration-150 ${activeTab === 'memory' ? 'bg-primary/10 text-primary font-medium' : 'text-ink hover:bg-border/50'}`}
             onClick={() => setActiveTab('memory')}
           >
-            <Database size={18} />
-            <span>Memory & Sessions</span>
+            <Database size={17} />
+            <span>Memory &amp; Sessions</span>
           </button>
 
           <div className="mt-auto pt-4 border-t border-border">
@@ -145,15 +349,14 @@ export default function SettingsModal() {
                 onClick={handleSave}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary text-white text-xs font-medium rounded-lg hover:bg-primary/90 transition-all duration-150 shadow-sm"
               >
-                {isSaved ? <Check size={14} /> : <ShieldCheck size={14} />}
-                <span>{isSaved ? 'Saved!' : 'Save Changes'}</span>
+                <span>{isSaved ? 'Saved!' : 'Save'}</span>
               </button>
               <IconButton icon={X} label="Close settings" onClick={() => setSettingsModalOpen(false)} />
             </div>
           </div>
 
           <div className="flex-1 p-6 overflow-y-auto space-y-6">
-            
+
             {/* 1. GENERAL TAB */}
             {activeTab === 'general' && (
               <div className="space-y-6 max-w-xl">
@@ -166,7 +369,7 @@ export default function SettingsModal() {
                         type="text"
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        className={INPUT_CLS}
                       />
                     </div>
                     <div>
@@ -175,7 +378,7 @@ export default function SettingsModal() {
                         type="text"
                         value={formData.preferredName}
                         onChange={(e) => setFormData({ ...formData, preferredName: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        className={INPUT_CLS}
                       />
                     </div>
                     <div>
@@ -184,7 +387,7 @@ export default function SettingsModal() {
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        className={INPUT_CLS}
                       />
                     </div>
                     <div>
@@ -195,22 +398,17 @@ export default function SettingsModal() {
                         max="120"
                         value={formData.age}
                         onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        className={INPUT_CLS}
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-ink mb-1">Gender / Sex</label>
-                      <select
+                      <FlyoutSelect
+                        className="w-full"
                         value={formData.gender}
-                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                        className="w-full px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                      >
-                        <option value="Female">Female</option>
-                        <option value="Male">Male</option>
-                        <option value="Non-binary">Non-binary</option>
-                        <option value="Other">Other</option>
-                        <option value="Prefer not to say">Prefer not to say</option>
-                      </select>
+                        onChange={(v) => setFormData({ ...formData, gender: v })}
+                        options={['Female', 'Male', 'Non-binary', 'Other', 'Prefer not to say']}
+                      />
                     </div>
                   </div>
                 </section>
@@ -231,15 +429,12 @@ export default function SettingsModal() {
                 {/* Blood Group */}
                 <div>
                   <label className="block text-xs font-semibold text-ink mb-1.5">Blood Group</label>
-                  <select
+                  <FlyoutSelect
+                    className="w-48"
                     value={formData.bloodGroup}
-                    onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                    className="w-48 px-3 py-2 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  >
-                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'].map((bg) => (
-                      <option key={bg} value={bg}>{bg}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setFormData({ ...formData, bloodGroup: v })}
+                    options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown']}
+                  />
                 </div>
 
                 {/* Allergies Tag Input */}
@@ -266,7 +461,7 @@ export default function SettingsModal() {
                       value={allergyInput}
                       onChange={(e) => setAllergyInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag('allergies', allergyInput, setAllergyInput))}
-                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className={INPUT_SM_CLS.replace('w-full', 'flex-1')}
                     />
                     <button
                       onClick={() => addTag('allergies', allergyInput, setAllergyInput)}
@@ -301,7 +496,7 @@ export default function SettingsModal() {
                       value={conditionInput}
                       onChange={(e) => setConditionInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag('chronicConditions', conditionInput, setConditionInput))}
-                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className={INPUT_SM_CLS.replace('w-full', 'flex-1')}
                     />
                     <button
                       onClick={() => addTag('chronicConditions', conditionInput, setConditionInput)}
@@ -314,7 +509,7 @@ export default function SettingsModal() {
 
                 {/* Current Medications */}
                 <div>
-                  <label className="block text-xs font-semibold text-ink mb-1">Current Medications & Dosages</label>
+                  <label className="block text-xs font-semibold text-ink mb-1">Current Medications &amp; Dosages</label>
                   <p className="text-[11px] text-muted mb-2">e.g. Lisinopril 10mg daily, Metformin 500mg, Vitamin D3</p>
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {formData.currentMedications.map((med, idx) => (
@@ -336,7 +531,7 @@ export default function SettingsModal() {
                       value={medicationInput}
                       onChange={(e) => setMedicationInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag('currentMedications', medicationInput, setMedicationInput))}
-                      className="flex-1 px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      className={INPUT_SM_CLS.replace('w-full', 'flex-1')}
                     />
                     <button
                       onClick={() => addTag('currentMedications', medicationInput, setMedicationInput)}
@@ -360,7 +555,7 @@ export default function SettingsModal() {
                           ...formData,
                           emergencyContact: { ...formData.emergencyContact, name: e.target.value }
                         })}
-                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        className={INPUT_XS_CLS}
                       />
                     </div>
                     <div>
@@ -372,7 +567,7 @@ export default function SettingsModal() {
                           ...formData,
                           emergencyContact: { ...formData.emergencyContact, phone: e.target.value }
                         })}
-                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        className={INPUT_XS_CLS}
                       />
                     </div>
                     <div>
@@ -384,7 +579,7 @@ export default function SettingsModal() {
                           ...formData,
                           emergencyContact: { ...formData.emergencyContact, relation: e.target.value }
                         })}
-                        className="w-full px-3 py-1.5 rounded-lg border border-border bg-canvas text-ink text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        className={INPUT_XS_CLS}
                       />
                     </div>
                   </div>
@@ -402,34 +597,28 @@ export default function SettingsModal() {
                       onClick={() => setTheme('light')}
                       className={`flex-1 p-2 rounded-xl border-2 transition-all duration-150 ${theme === 'light' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
-                      <img src="/f1.png" alt="Light theme preview" className="w-full h-24 object-cover rounded-lg border border-border mb-2 shadow-sm" />
+                      <div className="relative w-full h-24 rounded-lg mb-2 shadow-sm overflow-hidden border border-border flex items-center justify-center p-[2px]">
+                        <img src="/woodbg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+                        <img src="/f1.png" alt="Light theme preview" className="relative w-full h-full object-cover rounded-lg shadow-sm border border-black/10" />
+                      </div>
                       <span className="text-sm font-medium text-ink">Light Mode</span>
                     </button>
                     <button
                       onClick={() => setTheme('dark')}
                       className={`flex-1 p-2 rounded-xl border-2 transition-all duration-150 ${theme === 'dark' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
-                      <img src="/f2.png" alt="Dark theme preview" className="w-full h-24 object-cover rounded-lg border border-border mb-2 shadow-sm" />
+                      <div className="relative w-full h-24 rounded-lg mb-2 shadow-sm overflow-hidden border border-border flex items-center justify-center p-[2px]">
+                        <img src="/woodbg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
+                        <img src="/f2.png" alt="Dark theme preview" className="relative w-full h-full object-cover rounded-lg shadow-sm border border-white/10" />
+                      </div>
                       <span className="text-sm font-medium text-ink">Dark Mode</span>
                     </button>
                   </div>
                 </section>
 
                 <section>
-                  <h4 className="text-sm font-semibold text-ink mb-3 pb-2 border-b border-border">Typography & Reading Size</h4>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-muted">A (12px)</span>
-                    <input
-                      type="range"
-                      min="12"
-                      max="24"
-                      step="1"
-                      value={fontSize}
-                      onChange={(e) => setFontSize(parseInt(e.target.value, 10))}
-                      className="flex-1 accent-primary"
-                    />
-                    <span className="text-base text-ink font-semibold">A ({fontSize}px)</span>
-                  </div>
+                  <h4 className="text-sm font-semibold text-ink mb-3 pb-2 border-b border-border">Typography &amp; Reading Size</h4>
+                  <FontSizeStepper fontSize={fontSize} setFontSize={setFontSize} />
                 </section>
               </div>
             )}
@@ -437,16 +626,20 @@ export default function SettingsModal() {
             {/* 4. MEMORY & SESSIONS TAB */}
             {activeTab === 'memory' && (
               <div className="space-y-6 max-w-xl">
-                <div className="p-4 rounded-xl border border-border bg-canvas space-y-3">
+                <div className="p-5 rounded-xl border border-border bg-canvas space-y-4">
                   <h4 className="text-sm font-semibold text-ink flex items-center gap-2">
-                    <Database size={16} className="text-primary" />
-                    <span>Local Database & Storage Status</span>
+                    <Clock size={16} className="text-primary" />
+                    <span>Session Information</span>
                   </h4>
-                  <div className="text-xs space-y-1.5 text-muted">
-                    <p>• Database: <span className="text-ink font-mono">SQLite (backend/data/healix.db)</span></p>
-                    <p>• Vector Engine: <span className="text-ink font-mono">ChromaDB (sentence-transformers)</span></p>
-                    <p>• Total Sessions Tracked: <span className="text-ink font-semibold">{conversations.length}</span></p>
-                    <p>• Active Session ID: <span className="text-ink font-mono">{activeConversationId || 'None'}</span></p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-surface rounded-lg border border-border shadow-sm">
+                      <div className="text-[11px] text-muted mb-1 font-medium uppercase tracking-wider">Last Login</div>
+                      <div className="text-sm font-semibold text-ink">{lastLogin}</div>
+                    </div>
+                    <div className="p-3 bg-surface rounded-lg border border-border shadow-sm">
+                      <div className="text-[11px] text-muted mb-1 font-medium uppercase tracking-wider">Current Session Duration</div>
+                      <div className="text-sm font-semibold text-ink">{sessionDuration}</div>
+                    </div>
                   </div>
                 </div>
               </div>

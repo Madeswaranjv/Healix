@@ -36,7 +36,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-ink/30 backdrop-enter"
+        className="absolute inset-0 bg-backdrop backdrop-blur-sm backdrop-enter"
         onClick={onClose}
         aria-hidden="true"
       />
