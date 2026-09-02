@@ -100,10 +100,10 @@ function renderTable(tableLines, key) {
   }
 
   return (
-    <div key={key} className="my-3.5 overflow-x-auto rounded-xl border border-border/80 shadow-xs bg-surface">
+    <div key={key} className="my-3.5 overflow-x-auto rounded-xl border border-table-border shadow-xs bg-table-bg">
       <table className="w-full text-left text-xs border-collapse min-w-[320px]">
         <thead>
-          <tr className="bg-canvas/90 border-b border-border text-ink font-semibold">
+          <tr className="bg-table-header border-b border-table-border text-ink font-semibold">
             {headerRow.map((col, ci) => (
               <th key={ci} className="px-3.5 py-2.5 font-semibold text-ink tracking-tight">
                 {renderInline(col)}
@@ -111,9 +111,9 @@ function renderTable(tableLines, key) {
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-border/50">
+        <tbody className="divide-y divide-table-border/60">
           {bodyRows.map((row, ri) => (
-            <tr key={ri} className="hover:bg-accent-soft/30 transition-colors duration-100 odd:bg-surface even:bg-canvas/40">
+            <tr key={ri} className="hover:bg-accent-soft/50 transition-colors duration-100 odd:bg-table-bg even:bg-table-alt">
               {row.map((cell, ci) => (
                 <td key={ci} className="px-3.5 py-2 text-ink/90 leading-relaxed align-top">
                   {renderInline(cell)}

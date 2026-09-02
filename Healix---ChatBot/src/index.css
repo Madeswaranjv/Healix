@@ -10,6 +10,9 @@
 
 /* ---- Theme Tokens ---- */
 @theme {
+  --color-white: #FFFFFF;
+  --color-black: #000000;
+
   /* Color tokens — clinical-blue palette */
   --color-canvas: #F8FAFC;
   --color-surface: #FFFFFF;
@@ -25,6 +28,10 @@
   --color-dropdown: #FFFFFF;
   --color-input: #FFFFFF;
   --color-inputborder: #E2E8F0;
+  --color-table-bg: #EEF2F6;
+  --color-table-header: #DFE7F1;
+  --color-table-alt: #E5ECF5;
+  --color-table-border: #CBD5E1;
 
   /* ---- Interactive State Tokens ---- */
   --color-sidebar-btn-hover: #E6F0FA;
@@ -302,6 +309,18 @@
   }
 }
 
+/* New chat button — hover must force white text */
+.new-chat-btn {
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.new-chat-btn:hover {
+  background-color: var(--color-primary);
+  color: #FFFFFF !important;
+}
+
 /* ---- Reduced Motion ---- */
 @media (prefers-reduced-motion: reduce) {
 
@@ -326,6 +345,8 @@
 
 /* ---- Light Theme ---- */
 .light {
+  --color-white: #FFFFFF;
+  --color-black: #000000;
   --color-canvas: #F8FAFC;
   --color-surface: #FFFFFF;
   --color-ink: #0F172A;
@@ -340,6 +361,10 @@
   --color-dropdown: #FFFFFF;
   --color-input: #FFFFFF;
   --color-inputborder: #E2E8F0;
+  --color-table-bg: #EEF2F6;
+  --color-table-header: #DFE7F1;
+  --color-table-alt: #E5ECF5;
+  --color-table-border: #CBD5E1;
 
   --color-sidebar-btn-hover: #E6F0FA;
   --color-sidebar-icon-hover: #F3F7FC;
@@ -351,6 +376,8 @@
 
 /* ---- Dark Theme ---- */
 .dark {
+  --color-white: #FFFFFF;
+  --color-black: #000000;
   --color-canvas: #131313;
   --color-surface: #000000;
   --color-ink: #F8FAFC;
@@ -365,6 +392,10 @@
   --color-dropdown: #262627;
   --color-input: #57555534;
   --color-inputborder: #444343;
+  --color-table-bg: #1A1A1E;
+  --color-table-header: #25252B;
+  --color-table-alt: #151518;
+  --color-table-border: #2C2D2E;
 
   --color-sidebar-btn-hover: #1E293B;
   --color-sidebar-icon-hover: #172033;

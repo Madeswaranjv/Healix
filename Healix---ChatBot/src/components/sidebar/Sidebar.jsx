@@ -134,12 +134,10 @@ export function Sidebar() {
             <button
               onClick={handleNewChat}
               className="
+                new-chat-btn
                 flex items-center justify-center gap-2
                 w-full py-2 rounded-lg
-                border border-primary text-primary
                 text-xs font-semibold
-                hover:bg-primary hover:text-white
-                transition-colors duration-150 ease-out
               "
               title="Start new consultation"
             >
@@ -275,17 +273,15 @@ export function MobileSidebarDrawer() {
           <button
             onClick={handleNewChat}
             className="
+              new-chat-btn
               flex items-center justify-center gap-2
               w-full py-2 rounded-lg
-              border border-primary text-primary
               text-xs font-semibold
-              hover:bg-primary hover:text-white
-              transition-colors duration-150 ease-out
             "
             title="Start new consultation"
           >
             <Plus size={14} />
-            <span>New chat blah </span>
+            <span>New chat</span>
           </button>
         </div>
 
