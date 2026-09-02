@@ -63,25 +63,15 @@ export default function SearchPanel({ onClose }) {
         className="relative bg-surface rounded-xl shadow-lg border border-border w-full max-w-2xl p-4 flex flex-col max-h-[70vh] animate-in fade-in zoom-in-95 duration-150"
       >
         {/* Search input */}
-        <div className="relative mb-4">
-          <Search
-            size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-muted"
-          />
+        <div className="flex items-center gap-3 w-full bg-canvas border border-border rounded-lg px-4 py-3 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-colors duration-150 mb-4 shadow-sm">
+          <Search size={18} className="text-muted flex-shrink-0" />
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search conversations..."
-            className="
-              w-full pl-11 pr-4 py-3
-              text-base text-ink
-              bg-canvas border border-border rounded-lg
-              placeholder:text-muted
-              focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary
-              transition-colors duration-150
-            "
+            className="w-full text-base text-ink bg-transparent focus:outline-none placeholder:text-muted"
             aria-label="Search conversations"
           />
         </div>

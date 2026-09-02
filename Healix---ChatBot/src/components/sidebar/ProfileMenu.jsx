@@ -34,7 +34,7 @@ export default function ProfileMenu() {
   return (
     <div
       ref={menuRef}
-      className="absolute bottom-16 left-3 w-64 flyout-menu py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 shadow-xl border border-border/80"
+      className="absolute bottom-full left-0 mb-2 w-64 flyout-menu py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 shadow-xl border border-border/80"
     >
       {/* Active User Header info */}
       <div className="px-3.5 py-2 border-b border-border/70 mb-1">

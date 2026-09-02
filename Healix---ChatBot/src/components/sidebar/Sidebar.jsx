@@ -10,9 +10,10 @@ import ProfileMenu from './ProfileMenu';
 import { useStore } from '../../store/useStore';
 
 /**
- * Desktop sidebar:
- * - 280px expanded, 0px fully closed when collapsed (nothing visible except floating border toggle button)
- * - Sidebar controlling icon sits directly on the boundary line of the sidebar
+ * Desktop sidebar behaviour (controlled via inline transition styles):
+ *  CLOSE → content vanishes instantly (delay 0), width collapses to 20px (delay 0)
+ *  OPEN  → width expands after 150ms delay, content fades in after 200ms delay
+ *  HOVER → hovering 7px below toggle peeks sidebar; exits on mouse-leave
  */
 export function Sidebar() {
   const {
@@ -33,71 +34,74 @@ export function Sidebar() {
   } = useStore();
 
   const [isHoverOpen, setIsHoverOpen] = useState(false);
-  const sidebarRef = useRef(null);
 
-  // True if sidebar should visually appear open (toggled OR hover-peeked)
+  // Sidebar is visually open if toggle-open OR hover-peeked
   const isOpen = isSidebarOpen || isHoverOpen;
-
-  const handleMouseEnter = () => {
-    setIsHoverOpen(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsHoverOpen(false);
-  };
 
   const handleNewChat = () => {
     setActiveConversation(null);
   };
 
+  // Close must also kill hover state, otherwise hover keeps isOpen=true
+  const handleToggle = () => {
+    if (isSidebarOpen) setIsHoverOpen(false);
+    toggleSidebar();
+  };
+
+  // ── Inline transition styles ──────────────────────────────────────
+  // Using style objects instead of Tailwind classes so open/close
+  // each get their own independent transition timing.
+
+  const asideStyle = isOpen
+    ? { width: '280px', transition: 'width 400ms ease-out 150ms' }
+    : { width: '60px', transition: 'width 400ms ease-out 150ms' };
+
+  const contentStyle = isOpen
+    ? { opacity: 1, pointerEvents: 'auto', transition: 'opacity 200ms ease-out 500ms' }
+    : { opacity: 0, pointerEvents: 'none', transition: 'opacity 80ms ease-out 100ms' };
+
   return (
     <aside
-      ref={sidebarRef}
-      onMouseLeave={handleMouseLeave}
-      className={`
-        relative z-30 h-screen bg-surface flex-shrink-0
+      onMouseLeave={() => setIsHoverOpen(false)}
+      onMouseMove={(e) => {
+        if (!isOpen) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (e.clientY - rect.top >= 47) {
+            setIsHoverOpen(true);
+          }
+        }
+      }}
+      style={asideStyle}
+      className="
+        relative z-30 h-screen bg-surface flex-shrink-0 min-w-0
         hidden lg:flex flex-col
         border-r border-border
-        transition-all duration-300 ease-out
-        ${isOpen ? 'w-[280px]' : 'w-16'}
-      `}
+      "
       aria-label="Desktop navigation sidebar"
     >
-      {/* Toggle button — positioned on the right edge */}
+      {/* Toggle button — centered on right border via left-full + -translate-x-1/2 */}
       <button
-        onClick={toggleSidebar}
+        onClick={handleToggle}
         className="
-          absolute top-3.5 -right-3.5 z-50
+          absolute top-3 left-full -translate-x-1/2 z-50
           flex items-center justify-center
           w-7 h-7 rounded-full
-          border border-inputborder bg-surface
-          shadow-sm
-          text-muted hover:text-ink hover:bg-sidebar-btn-hover active:text-ink
-          hover:border-ink/50 active:border-ink focus:border-ink
-          transition-colors duration-150 ease-out
+          border border-border bg-surface
+          shadow-sm cursor-pointer
+          text-muted hover:text-ink hover:bg-sidebar-icon-hover
+          transition-colors duration-200 ease-out
         "
         aria-label={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+        title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
       >
         {isSidebarOpen ? <PanelLeftClose size={16} /> : <PanelLeft size={16} />}
       </button>
 
-      {/*
-        Hover-to-peek trigger zone — only active when sidebar is collapsed.
-        Starts 49px from top (5px below the 32px toggle button at top-3)
-        so hovering on the toggle button or above it does NOT open the sidebar.
-      */}
-      {!isOpen && (
-        <div
-          onMouseEnter={handleMouseEnter}
-          className="absolute top-[49px] bottom-0 left-0 right-0 z-20"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Inner wrapper: overflow-visible when open so submenus float over canvas; overflow-hidden when closed */}
-      <div className={`w-full h-full ${isOpen ? 'overflow-visible' : 'overflow-hidden'} transition-opacity ${isOpen ? 'opacity-100 duration-200 delay-[300ms]' : 'opacity-0 duration-100 delay-100 pointer-events-none'}`}>
+      {/* Content wrapper */}
+      <div style={contentStyle} className="w-full h-full">
         <div className="flex flex-col h-full w-[280px] min-w-[280px]">
-          {/* Top icon row — Menu + Search, left-aligned */}
+
+          {/* Top icon row — Menu + Search */}
           <div className="flex items-center gap-0 px-4 pt-4 pb-2">
             <div className="relative">
               <IconButton
@@ -139,7 +143,7 @@ export function Sidebar() {
               "
               title="Start new consultation"
             >
-              <Plus size={16} />
+              <Plus size={14} />
               <span>New chat</span>
             </button>
           </div>
@@ -153,11 +157,11 @@ export function Sidebar() {
           </div>
 
           {/* Profile / Auth Section */}
-          <div className="mt-auto border-t border-border p-3">
-            <div className="relative">
+          <div className="mt-auto border-t border-border p-3 overflow-visible">
+            <div className="relative overflow-visible">
               <button
                 onClick={isAuthenticated ? toggleProfileMenu : () => setAuthModalOpen(true)}
-                className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-sidebar-btn-hover transition-colors duration-150 text-left"
+                className="flex items-center gap-3 w-full p-2 rounded-lg hover:bg-sidebar-icon-hover transition-colors duration-150 text-left"
               >
                 <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center font-semibold text-xs flex-shrink-0 shadow-xs">
                   {userProfile?.preferredName ? userProfile.preferredName.charAt(0).toUpperCase() : 'U'}
@@ -174,11 +178,13 @@ export function Sidebar() {
               {isProfileMenuOpen && <ProfileMenu />}
             </div>
           </div>
+
         </div>
       </div>
     </aside>
   );
 }
+
 
 /**
  * Mobile sidebar drawer — overlay below 768px.
@@ -279,7 +285,7 @@ export function MobileSidebarDrawer() {
             title="Start new consultation"
           >
             <Plus size={14} />
-            <span>New chat</span>
+            <span>New chat blah </span>
           </button>
         </div>
 
