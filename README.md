@@ -35,9 +35,34 @@
 |---|---|
 | **Frontend** | React 19, Vite, Tailwind CSS v4, Zustand, Lucide Icons |
 | **Backend** | Python 3.11+, FastAPI, Uvicorn, SQLite, ChromaDB |
-| **AI / LLM** | OpenRouter (MiniMax M3, Ling Flash, Gemma 4, Nemotron), HuggingFace MiniLM Embeddings |
+| **AI / LLM** | OpenRouter (MiniMax M3, Ling Flash, Gemma 4, Nemotron) |
+| **Embeddings** | OpenRouter Remote Embeddings (`openai/text-embedding-3-small`) |
 | **Search Engine** | Tavily Search API |
 | **Doc Readers** | pdfplumber, pypdf, pypdfium2, pdfminer.six, python-docx |
+
+---
+
+## 🧠 Retrieval-Augmented Generation (RAG) Pipeline
+
+Healix utilizes an ultra-lightweight, zero-local-model remote RAG architecture designed for low-memory cloud deployments (such as Render Free 512MB RAM):
+
+```
+Document Upload
+      ↓
+Text Extraction (pdfplumber, pypdf, python-docx)
+      ↓
+Text Chunking (RecursiveCharacterTextSplitter)
+      ↓
+OpenRouter Embeddings API (openai/text-embedding-3-small)
+      ↓
+ChromaDB Vector Store (Isolated session collections)
+      ↓
+Semantic Similarity Search (User Query → OpenRouter Vector → Top K)
+      ↓
+OpenRouter LLM (Grounded response generation with citations)
+```
+
+> **Zero Local Model Footprint**: Healix does not download or load any embedding models locally, completely eliminating PyTorch, CUDA, and SentenceTransformer dependencies to run comfortably within 512 MB RAM limits.
 
 ---
 
@@ -72,6 +97,8 @@ cp .env.example .env
 Edit `backend/.env` with your API keys:
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
+OPENROUTER_EMBEDDING_BATCH_SIZE=32
 TAVILY_API_KEY=your_tavily_api_key_here
 ```
 

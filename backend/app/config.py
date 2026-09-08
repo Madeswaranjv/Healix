@@ -60,10 +60,14 @@ class Settings(BaseSettings):
     HOST: str = Field(default="0.0.0.0", description="Server host")
     PORT: int = Field(default=8000, description="Server port")
     
-    # Embedding model name
-    EMBEDDING_MODEL_NAME: str = Field(
-        default="all-MiniLM-L6-v2",
-        description="Sentence transformers embedding model"
+    # OpenRouter Remote Embeddings (Zero local model / zero torch)
+    OPENROUTER_EMBEDDING_MODEL: str = Field(
+        default="openai/text-embedding-3-small",
+        description="Remote OpenRouter embeddings model"
+    )
+    OPENROUTER_EMBEDDING_BATCH_SIZE: int = Field(
+        default=32,
+        description="Max chunks per batch sent to OpenRouter Embeddings API"
     )
 
     model_config = SettingsConfigDict(

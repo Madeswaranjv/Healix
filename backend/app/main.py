@@ -168,6 +168,19 @@ async def root_status():
     }
 
 
+@app.on_event("startup")
+async def validate_startup_configuration():
+    """Validates presence of required environment variables without leaking credentials."""
+    if not settings.OPENROUTER_API_KEY or not settings.OPENROUTER_API_KEY.strip():
+        logger.error(
+            "CRITICAL CONFIG ERROR: OPENROUTER_API_KEY is not configured! "
+            "OpenRouter LLM chat and text embeddings will fail until OPENROUTER_API_KEY is set."
+        )
+    else:
+        logger.info("OPENROUTER_API_KEY is configured.")
+    logger.info(f"OpenRouter Embeddings Model configured: {settings.OPENROUTER_EMBEDDING_MODEL}")
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -175,6 +188,7 @@ async def health_check():
         "status": "healthy",
         "app": "Healix Healthcare Backend",
         "vectorstore": "ready",
+        "embedding_model": settings.OPENROUTER_EMBEDDING_MODEL,
         "chat_model": settings.OPENROUTER_CHAT_MODEL,
         "vision_model": settings.OPENROUTER_VISION_MODEL
     }

@@ -34,7 +34,7 @@ LLM: Hosted via **OpenRouter** (single OpenAI-compatible API, free-tier models).
 |---|---|---|
 | API framework | FastAPI | Async, plays well with React, auto docs (`/docs`) |
 | LLM provider | OpenRouter (free-tier models) | One API key, one OpenAI-compatible endpoint for every model, easy to swap models |
-| Embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`) | Free, local, no API cost |
+| Embeddings | OpenRouter API (`openai/text-embedding-3-small`) | Remote OpenAI-compatible API, zero torch/CUDA dependencies, fits 512MB RAM |
 | Vector store | ChromaDB (persistent, local) | Free, simple, good enough at this scale |
 | Document parsing | `pdfplumber`, `python-docx` | Handles PDF/DOCX text extraction |
 | Web search | Tavily API (MCP-style tool) | Cheap, simple search API; swappable for a real MCP server later |
@@ -124,7 +124,6 @@ pypdf
 pdfplumber
 python-docx
 chromadb
-sentence-transformers
 langchain
 langchain-community
 langchain-text-splitters
