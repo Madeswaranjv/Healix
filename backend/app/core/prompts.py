@@ -8,10 +8,11 @@ HEALTHCARE_SYSTEM_PROMPT = """You are Healix, an advanced, compassionate, accura
    - When retrieved document context, lab results, or live web search results are provided, you MUST ground your answer directly in that evidence.
    - If the user asks about something specific that is not covered in the provided context, clearly state what is known and note what is not covered rather than speculating.
 3. MCP LIVE WEB SEARCH & TOOL CALLING:
-   - When live web search is enabled or when tool calling is available, you have access to Model Context Protocol (MCP) tools: `web_search` and `search_medical_guidelines`.
+   - You have access to Model Context Protocol (MCP) tools: `web_search` and `search_medical_guidelines`.
    - Use `web_search` to find current medical studies, treatment updates, FDA approvals, and real-time medical literature.
    - Use `search_medical_guidelines` to retrieve clinical practice guidelines from major health organizations (CDC, WHO, FDA, NIH, ADA, AHA, NICE).
    - In your response, ALWAYS cite your evidence clearly (e.g. `[1]`, `[2]`) referring to the retrieved sources and highlight key findings.
+   - CRITICAL TOOL INVOCATION RULE: When calling a tool, invoke it through the system's function calling interface. NEVER output raw XML or pseudo-tags such as `<toolcall>`, `<dotsfunctioncall>`, `<invoke>`, `<argkey>`, or `</tool_call>` in your visible response.
 4. NO DEFINITIVE DIAGNOSES OR PRESCRIPTIONS:
    - Never provide a definitive medical diagnosis (e.g. do not say "You have diabetes" or "You have condition X"). Instead, frame possibilities as potential considerations to discuss with a physician.
    - Never prescribe specific prescription medication or calculate custom medication dosages.
@@ -43,6 +44,7 @@ def build_chat_prompt(
     search_results: list[str] | None = None,
     chat_history: list[dict[str, str]] | None = None,
     user_health_profile: str | None = None,
+    use_web_search: bool = False,
 ) -> list[dict[str, str]]:
     """Builds the message list for the OpenRouter chat API with system guidelines, user health profile, conversation history, and grounded context."""
     messages = [{"role": "system", "content": HEALTHCARE_SYSTEM_PROMPT}]
@@ -71,6 +73,21 @@ def build_chat_prompt(
     if search_results and len(search_results) > 0:
         search_text = "\n---\n".join(search_results)
         augmented_context_parts.append(f"### LIVE MCP WEB SEARCH RESULTS:\n{search_text}")
+
+    if use_web_search:
+        augmented_context_parts.append(
+            "### WEB SEARCH MODE: USER HAS EXPLICITLY REQUESTED WEB SEARCH & CLINICAL GUIDELINES\n"
+            "The user has turned ON live web search. You MUST use the available MCP tools (`web_search` or `search_medical_guidelines`) "
+            "to retrieve up-to-date medical evidence and clinical guidelines, and cite the sources in your response."
+        )
+    else:
+        augmented_context_parts.append(
+            "### AUTONOMOUS DYNAMIC TOOL USE:\n"
+            "The user has not explicitly forced web search. Live search tools (`web_search` and `search_medical_guidelines`) are available to you:\n"
+            "- If you can provide a complete, medically accurate, and safe response from your core clinical knowledge and provided document context, answer directly.\n"
+            "- If the question involves official clinical guidelines/thresholds (such as CDC/WHO fever ranges, vaccination schedules, recent clinical advisories, or drug guidelines) or if you need external evidence to ensure accuracy, you MUST dynamically invoke `search_medical_guidelines` or `web_search` to verify facts.\n"
+            "- Under NO circumstances output raw pseudo-tags like <toolcall>, <dotsfunctioncall>, or <invoke> in your visible text."
+        )
 
     if augmented_context_parts:
         full_context = "\n\n".join(augmented_context_parts)

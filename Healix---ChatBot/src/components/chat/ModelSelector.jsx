@@ -9,7 +9,7 @@ const MODELS = [
   },
   {
     name: 'Cortex',
-    options: ['Cortex M3', 'Cortex M2.7'],
+    options: [],
   },
   {
     name: 'Helix',

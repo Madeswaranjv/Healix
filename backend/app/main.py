@@ -484,14 +484,20 @@ async def chat(request: ChatRequest):
         context_chunks=context_chunks,
         search_results=None,
         chat_history=chat_history,
-        user_health_profile=user_health_summary
+        user_health_profile=user_health_summary,
+        use_web_search=request.use_web_search,
     )
 
-    # 6. Pass MCP tools if web search is enabled
-    tools = mcp_service.get_openai_tools() if request.use_web_search else None
+    # 6. Pass MCP tools unconditionally so LLM can dynamically call search whenever needed
+    tools = mcp_service.get_openai_tools()
 
     # 7. Query OpenRouter LLM via tool-calling loop
-    llm_result = await llm_service.generate_chat_response(messages, model=request.model, tools=tools)
+    llm_result = await llm_service.generate_chat_response(
+        messages,
+        model=request.model,
+        tools=tools,
+        user_query=user_query,
+    )
     raw_answer = llm_result.get("answer", "")
     web_sources = llm_result.get("sources", [])
     if web_sources:
@@ -566,10 +572,11 @@ async def chat_stream(request: ChatRequest):
         context_chunks=context_chunks,
         search_results=None,
         chat_history=chat_history,
-        user_health_profile=user_health_summary
+        user_health_profile=user_health_summary,
+        use_web_search=request.use_web_search,
     )
 
-    tools = mcp_service.get_openai_tools() if request.use_web_search else None
+    tools = mcp_service.get_openai_tools()
 
     async def event_generator():
         # 1. Send initial metadata event (document sources, emergency status, chunks used)
@@ -589,7 +596,12 @@ async def chat_stream(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'delta', 'content': EMERGENCY_BANNER})}\n\n"
 
         # 3. Stream from LLM service (handles MCP tool execution events and text deltas)
-        async for event in llm_service.generate_chat_stream(messages, model=request.model, tools=tools):
+        async for event in llm_service.generate_chat_stream(
+            messages,
+            model=request.model,
+            tools=tools,
+            user_query=user_query,
+        ):
             event_type = event.get("type")
             
             if event_type == "tool_call":

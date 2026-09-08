@@ -13,13 +13,125 @@ from app.services.mcp_service import mcp_service
 logger = logging.getLogger("healix.llm")
 
 
+def parse_text_tool_calls(text: str, default_query: str = "") -> List[Dict[str, Any]]:
+    """Detects text/XML tool calls (e.g. <toolcall>, <dotsfunctioncall>, <tool_call>) emitted by models."""
+    calls = []
+    if not text:
+        return calls
+
+    lower = text.lower()
+    if not any(tag in lower for tag in ["<toolcall", "<tool_call", "<dotsfunctioncall", "<invoke"]):
+        return calls
+
+    tool_alias = {
+        "searchmedicalguidelines": "search_medical_guidelines",
+        "searchmedical_guidelines": "search_medical_guidelines",
+        "search_medical_guidelines": "search_medical_guidelines",
+        "websearch": "web_search",
+        "web_search": "web_search"
+    }
+
+    blocks = re.findall(
+        r"(<(?:toolcall|tool_call|dotsfunctioncall)[^>]*>.*?(?:</(?:toolcall|tool_call|dotsfunctioncall)>|\Z))",
+        text,
+        re.DOTALL | re.IGNORECASE
+    )
+    if not blocks:
+        blocks = [text]
+
+    for block in blocks:
+        name_match = re.search(
+            r"(?:<toolcall>|<tool_call>|<dotsfunctioncall>\s*<|name=[\"\']?)([a-zA-Z0-9_\-]+)",
+            block,
+            re.IGNORECASE
+        )
+        tool_name = "web_search"
+        if name_match:
+            raw_name = name_match.group(1).lower().replace('"', '').replace("'", "")
+            norm = raw_name.replace("_", "").replace("-", "")
+            tool_name = tool_alias.get(norm, tool_alias.get(raw_name, "web_search"))
+
+        val_match = re.search(r"<argvalue>(.*?)</argvalue>", block, re.DOTALL | re.IGNORECASE)
+        if not val_match:
+            val_match = re.search(r"<query>(.*?)</query>", block, re.DOTALL | re.IGNORECASE)
+
+        q = val_match.group(1).strip() if val_match else default_query
+        if q:
+            calls.append({"name": tool_name, "args": {"query": q, "topic": q}})
+
+    if not calls and default_query:
+        tool_name = "search_medical_guidelines" if "guideline" in lower else "web_search"
+        calls.append({"name": tool_name, "args": {"query": default_query, "topic": default_query}})
+
+    return calls
+
+
 def clean_tool_markup(text: str) -> str:
-    """Removes raw XML tool markup (e.g. <tool_call>...</tool_call>) if output by LLMs in text."""
+    """Removes raw XML tool markup (e.g. <toolcall>, <dotsfunctioncall>, <tool_call>, etc.) if output by LLMs in text."""
     if not text:
         return ""
-    cleaned = re.sub(r"<tool_call>.*?</tool_call>", "", text, flags=re.DOTALL)
-    cleaned = re.sub(r"<arg_key>.*?</arg_value>", "", cleaned, flags=re.DOTALL)
+    patterns = [
+        r"<dotsfunctioncall[^>]*>.*?</dotsfunctioncall>",
+        r"<tool_call>.*?</tool_call>",
+        r"<toolcall>.*?</toolcall>",
+        r"<toolcall>.*?</tool_call>",
+        r"<invoke[^>]*>.*?</invoke>",
+        r"<arg_key>.*?</arg_key>",
+        r"<arg_value>.*?</arg_value>",
+        r"<argkey>.*?</argkey>",
+        r"<argvalue>.*?</argvalue>",
+        r"</?(?:dotsfunctioncall|toolcall|tool_call|invoke|argkey|argvalue|arg_key|arg_value|searchmedicalguidelines|searchmedical_guidelines|websearch|web_search)[^>]*>",
+    ]
+    cleaned = text
+    for pat in patterns:
+        cleaned = re.sub(pat, "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    cleaned = re.sub(r"\n\s*\n\s*\n", "\n\n", cleaned)
     return cleaned.strip()
+
+
+class StreamTagFilter:
+    """Filters out XML/tool-calling markup from streaming tokens in real time."""
+    TAG_REGEX = re.compile(
+        r"</?(?:dotsfunctioncall|toolcall|tool_call|invoke|argkey|argvalue|arg_key|arg_value|searchmedicalguidelines|searchmedical_guidelines|websearch|web_search)[^>]*>",
+        re.IGNORECASE
+    )
+
+    def __init__(self):
+        self.buffer = ""
+
+    def process(self, chunk: str) -> str:
+        self.buffer += chunk
+        out = []
+
+        while self.buffer:
+            if "<" in self.buffer:
+                idx = self.buffer.find("<")
+                if idx > 0:
+                    out.append(self.buffer[:idx])
+                    self.buffer = self.buffer[idx:]
+
+                close_idx = self.buffer.find(">")
+                if close_idx != -1:
+                    tag = self.buffer[:close_idx + 1]
+                    self.buffer = self.buffer[close_idx + 1:]
+                    if not self.TAG_REGEX.match(tag):
+                        out.append(tag)
+                else:
+                    if len(self.buffer) > 60:
+                        out.append(self.buffer[0])
+                        self.buffer = self.buffer[1:]
+                    break
+            else:
+                out.append(self.buffer)
+                self.buffer = ""
+                break
+
+        return "".join(out)
+
+    def flush(self) -> str:
+        res = self.buffer
+        self.buffer = ""
+        return self.TAG_REGEX.sub("", res)
 
 
 class LLMService:
@@ -45,9 +157,9 @@ class LLMService:
     MODEL_MAP = {
         "Asclepius Flash": "inclusionai/ling-3.0-flash-fin:free",
         "Asclepius": "inclusionai/ling-3.0-flash-fin:free",
-        "Cortex M3": "minimax/minimax-m3:free",
-        "Cortex M2.7": "minimax/minimax-m2.7:free",
-        "Cortex": "minimax/minimax-m3:free",
+        "Cortex": "cohere/north-mini-code:free",
+        "Cortex M3": "cohere/north-mini-code:free",
+        "Cortex M2.7": "cohere/north-mini-code:free",
         "Helix 4 Pro": "google/gemma-4-31b-it:free",
         "Helix": "google/gemma-4-31b-it:free",
         "Aether 3 Super": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -74,7 +186,8 @@ class LLMService:
         model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: float = 0.3,
-        max_tokens: int = 1500
+        max_tokens: int = 1500,
+        user_query: str = "",
     ) -> Dict[str, Any]:
         """Generates a chat completion with MCP tool-calling loop and model fallbacks.
         
@@ -117,8 +230,9 @@ class LLMService:
                         choice = response.choices[0]
                         message = choice.message
 
+                        # Check native tool calls
                         if getattr(message, "tool_calls", None) and len(message.tool_calls) > 0:
-                            logger.info(f"[LLM Tool Turn {turn+1}] Model {current_model} requested {len(message.tool_calls)} tool call(s).")
+                            logger.info(f"[LLM Tool Turn {turn+1}] Model {current_model} requested {len(message.tool_calls)} native tool call(s).")
                             working_messages.append(message)
 
                             for tc in message.tool_calls:
@@ -141,8 +255,25 @@ class LLMService:
                                     "name": func_name,
                                     "content": tool_result.content
                                 })
+
+                        # Fallback check for text/XML tool calls emitted in message.content
+                        elif turn == 0 and parse_text_tool_calls(message.content or "", default_query=user_query):
+                            text_calls = parse_text_tool_calls(message.content or "", default_query=user_query)
+                            logger.info(f"[LLM Tool Turn {turn+1}] Model {current_model} emitted {len(text_calls)} text XML tool call(s).")
+                            for tc in text_calls:
+                                func_name = tc["name"]
+                                func_args = tc["args"]
+                                executed_tool_calls.append({"name": func_name, "args": func_args})
+                                tool_result = await mcp_service.execute_tool(func_name, func_args)
+                                if tool_result.sources:
+                                    accumulated_sources.extend(tool_result.sources)
+                                working_messages.append({
+                                    "role": "system",
+                                    "content": f"[Tool Result for '{func_name}']:\n{tool_result.content}"
+                                })
+
                         else:
-                            # Final answer reached
+                            # Final answer reached directly
                             content = clean_tool_markup(message.content or "")
                             return {
                                 "answer": content.strip(),
@@ -202,7 +333,8 @@ class LLMService:
         model: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         temperature: float = 0.3,
-        max_tokens: int = 1500
+        max_tokens: int = 1500,
+        user_query: str = "",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yields structured streaming events from OpenRouter with MCP tool execution and fallback support.
         
@@ -246,8 +378,12 @@ class LLMService:
                     choice = initial_resp.choices[0]
                     message = choice.message
 
+                    has_tool_calls = False
+
+                    # Case A: Native tool calls
                     if getattr(message, "tool_calls", None) and len(message.tool_calls) > 0:
-                        logger.info(f"[LLM Stream] Model {current_model} triggered {len(message.tool_calls)} MCP tool call(s).")
+                        has_tool_calls = True
+                        logger.info(f"[LLM Stream] Model {current_model} triggered {len(message.tool_calls)} native MCP tool call(s).")
                         working_messages.append(message)
 
                         for tc in message.tool_calls:
@@ -257,19 +393,16 @@ class LLMService:
                             except Exception:
                                 func_args = {"query": tc.function.arguments}
 
-                            # Emit tool_call event to client
                             yield {
                                 "type": "tool_call",
                                 "name": func_name,
                                 "arguments": func_args
                             }
 
-                            # Execute tool
                             tool_res = await mcp_service.execute_tool(func_name, func_args)
                             if tool_res.sources:
                                 accumulated_sources.extend(tool_res.sources)
 
-                            # Emit tool_result event to client
                             yield {
                                 "type": "tool_result",
                                 "name": func_name,
@@ -284,6 +417,39 @@ class LLMService:
                                 "content": tool_res.content
                             })
 
+                    # Case B: Text-based XML tool calls fallback
+                    else:
+                        text_calls = parse_text_tool_calls(message.content or "", default_query=user_query)
+                        if text_calls:
+                            has_tool_calls = True
+                            logger.info(f"[LLM Stream] Model {current_model} emitted {len(text_calls)} text XML tool call(s).")
+                            for tc in text_calls:
+                                func_name = tc["name"]
+                                func_args = tc["args"]
+
+                                yield {
+                                    "type": "tool_call",
+                                    "name": func_name,
+                                    "arguments": func_args
+                                }
+
+                                tool_res = await mcp_service.execute_tool(func_name, func_args)
+                                if tool_res.sources:
+                                    accumulated_sources.extend(tool_res.sources)
+
+                                yield {
+                                    "type": "tool_result",
+                                    "name": func_name,
+                                    "sources": tool_res.sources,
+                                    "count": len(tool_res.sources)
+                                }
+
+                                working_messages.append({
+                                    "role": "system",
+                                    "content": f"[Tool Result for '{func_name}']:\n{tool_res.content}"
+                                })
+
+                    if has_tool_calls:
                         # Synthesis prompt instruction for final response
                         working_messages.append({
                             "role": "system",
@@ -302,16 +468,22 @@ class LLMService:
                             max_tokens=max_tokens,
                             stream=True
                         )
+                        tag_filter = StreamTagFilter()
                         async for chunk in stream_resp:
                             if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                                 text_chunk = chunk.choices[0].delta.content
-                                # Filter out any stray tool XML tags from stream
-                                if "<tool_call>" in text_chunk or "</tool_call>" in text_chunk:
-                                    continue
-                                yield {
-                                    "type": "delta",
-                                    "content": text_chunk
-                                }
+                                filtered = tag_filter.process(text_chunk)
+                                if filtered:
+                                    yield {
+                                        "type": "delta",
+                                        "content": filtered
+                                    }
+                        remaining = tag_filter.flush()
+                        if remaining:
+                            yield {
+                                "type": "delta",
+                                "content": remaining
+                            }
 
                         yield {
                             "type": "done",
@@ -319,11 +491,12 @@ class LLMService:
                         }
                         return
                     else:
-                        # No tool calls made; if content was returned in initial response, yield it
-                        if message.content:
+                        # No tool calls made; if content was returned in initial response, yield it directly
+                        cleaned_content = clean_tool_markup(message.content or "")
+                        if cleaned_content:
                             yield {
                                 "type": "delta",
-                                "content": clean_tool_markup(message.content)
+                                "content": cleaned_content
                             }
                             yield {
                                 "type": "done",
@@ -331,7 +504,7 @@ class LLMService:
                             }
                             return
 
-                # Direct stream when tools are not used
+                # Direct stream when tools are not used or initial content was empty
                 stream_resp = await self.client.chat.completions.create(
                     model=current_model,
                     messages=working_messages,
@@ -339,12 +512,21 @@ class LLMService:
                     max_tokens=max_tokens,
                     stream=True
                 )
+                tag_filter = StreamTagFilter()
                 async for chunk in stream_resp:
                     if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                        yield {
-                            "type": "delta",
-                            "content": chunk.choices[0].delta.content
-                        }
+                        filtered = tag_filter.process(chunk.choices[0].delta.content)
+                        if filtered:
+                            yield {
+                                "type": "delta",
+                                "content": filtered
+                            }
+                remaining = tag_filter.flush()
+                if remaining:
+                    yield {
+                        "type": "delta",
+                        "content": remaining
+                    }
                 yield {
                     "type": "done",
                     "sources": accumulated_sources
@@ -399,7 +581,7 @@ class LLMService:
         except Exception as e:
             logger.warning(f"Vision model {self.vision_model} failed ({e}). Attempting fallback vision models...")
             
-            fallback_vision_models = ["minimax/minimax-m2.7:free", "google/gemma-4-31b-it:free"]
+            fallback_vision_models = ["google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]
             for f_model in fallback_vision_models:
                 try:
                     logger.info(f"Attempting fallback vision model: {f_model}")

@@ -78,14 +78,18 @@ class MCPService:
             description=(
                 "Search accredited clinical practice guidelines from major health authorities "
                 "(CDC, WHO, FDA, NIH, AHA, ADA, NICE, PubMed). Use when clinical protocols, "
-                "diagnostic criteria, or official health advisory recommendations are needed."
+                "diagnostic criteria, fever/vital thresholds, or official health advisory recommendations are needed."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
                     "topic": {
                         "type": "string",
-                        "description": "Medical condition, drug, or clinical procedure topic (e.g., 'pediatric asthma exacerbation management')."
+                        "description": "Medical condition, drug, clinical threshold, or topic (e.g., 'fever temperature definition normal range clinical guidelines')."
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query string for clinical guidelines."
                     },
                     "organization": {
                         "type": "string",
@@ -93,7 +97,7 @@ class MCPService:
                         "default": "all"
                     }
                 },
-                "required": ["topic"]
+                "required": []
             },
             handler=self._handle_clinical_guidelines_search
         )
@@ -138,8 +142,20 @@ class MCPService:
         start_time = time.perf_counter()
         logger.info(f"[MCP Tool Call] Invoking tool '{name}' with arguments: {json.dumps(arguments)}")
 
-        if name not in self._handlers:
-            err_msg = f"Tool '{name}' is not registered in the MCP tool registry."
+        # Normalize tool name to handle common LLM variations (e.g. websearch vs web_search, searchmedical_guidelines)
+        normalized = name.lower().replace("-", "").replace("_", "").strip()
+        tool_alias_map = {
+            "websearch": "web_search",
+            "web_search": "web_search",
+            "searchmedicalguidelines": "search_medical_guidelines",
+            "searchmedical_guidelines": "search_medical_guidelines",
+            "search_medical_guidelines": "search_medical_guidelines",
+            "medicalguidelines": "search_medical_guidelines",
+        }
+        resolved_name = tool_alias_map.get(normalized, name)
+
+        if resolved_name not in self._handlers:
+            err_msg = f"Tool '{name}' (resolved: '{resolved_name}') is not registered in the MCP tool registry."
             logger.error(f"[MCP Tool Error] {err_msg}")
             return MCPToolResult(
                 tool_name=name,
@@ -149,19 +165,19 @@ class MCPService:
                 execution_time_ms=(time.perf_counter() - start_time) * 1000
             )
 
-        handler = self._handlers[name]
+        handler = self._handlers[resolved_name]
         try:
             result = await handler(arguments)
             elapsed_ms = (time.perf_counter() - start_time) * 1000
             logger.info(
-                f"[MCP Tool Result] Tool '{name}' executed successfully in {elapsed_ms:.1f}ms "
+                f"[MCP Tool Result] Tool '{resolved_name}' executed successfully in {elapsed_ms:.1f}ms "
                 f"({len(result.sources)} sources retrieved)."
             )
             result.execution_time_ms = elapsed_ms
             return result
         except Exception as e:
             elapsed_ms = (time.perf_counter() - start_time) * 1000
-            logger.error(f"[MCP Tool Exception] Error executing tool '{name}': {e}", exc_info=True)
+            logger.error(f"[MCP Tool Exception] Error executing tool '{resolved_name}': {e}", exc_info=True)
             return MCPToolResult(
                 tool_name=name,
                 success=False,
@@ -172,7 +188,7 @@ class MCPService:
 
     async def _handle_web_search(self, args: Dict[str, Any]) -> MCPToolResult:
         """Handler for 'web_search' MCP tool."""
-        query = args.get("query", "").strip()
+        query = (args.get("query") or args.get("topic") or args.get("search_query") or "").strip()
         max_results = int(args.get("max_results", 3))
 
         if not query:
@@ -233,8 +249,8 @@ class MCPService:
 
     async def _handle_clinical_guidelines_search(self, args: Dict[str, Any]) -> MCPToolResult:
         """Handler for 'search_medical_guidelines' MCP tool."""
-        topic = args.get("topic", "").strip()
-        organization = args.get("organization", "all").strip()
+        topic = (args.get("topic") or args.get("query") or args.get("search_query") or "").strip()
+        organization = (args.get("organization") or "all").strip()
         
         if not topic:
             return MCPToolResult(

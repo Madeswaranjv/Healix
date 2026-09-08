@@ -19,13 +19,13 @@ class Settings(BaseSettings):
         description="Primary chat / RAG model"
     )
     OPENROUTER_CHAT_MODEL_FALLBACK: str = Field(
-        default="minimax/minimax-m3:free",
+        default="google/gemma-4-31b-it:free",
         description="Fallback chat model for rate limits or outages"
     )
     
     # Vision Model
     OPENROUTER_VISION_MODEL: str = Field(
-        default="minimax/minimax-m3:free",
+        default="google/gemma-4-31b-it:free",
         description="Vision model supporting image analysis"
     )
     
@@ -37,8 +37,7 @@ class Settings(BaseSettings):
     
     # Frontend Model Selection Registry (Verified Active)
     OPENROUTER_MODEL_LING_3_FLASH: str = Field(default="inclusionai/ling-3.0-flash-fin:free")
-    OPENROUTER_MODEL_MINIMAX_M3: str = Field(default="minimax/minimax-m3:free")
-    OPENROUTER_MODEL_MINIMAX_M2_7: str = Field(default="minimax/minimax-m2.7:free")
+    OPENROUTER_MODEL_CORTEX: str = Field(default="cohere/north-mini-code:free")
     OPENROUTER_MODEL_GEMMA_4_31B: str = Field(default="google/gemma-4-31b-it:free")
     OPENROUTER_MODEL_NEMOTRON_3_SUPER: str = Field(default="nvidia/nemotron-3-super-120b-a12b:free")
     OPENROUTER_MODEL_NEMOTRON_3_5_LIGHTNING: str = Field(default="nvidia/nemotron-3.5-lightning:free")
