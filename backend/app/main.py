@@ -86,6 +86,7 @@ class UserUpdateRequest(BaseModel):
     current_medications: Optional[List[str]] = None
     emergency_contact: Optional[Dict[str, str]] = None
     preferences: Optional[Dict[str, Any]] = None
+    password: Optional[str] = None
 
 
 class UserCreateRequest(BaseModel):
@@ -219,10 +220,12 @@ async def register(request: RegisterRequest):
     )
 
     auth_data = user_service.authenticate(request.email, request.password)
+    user_payload = auth_data or user
     return {
         "status": "success",
         "message": "Account created successfully",
-        "user": auth_data or user
+        "user": user_payload,
+        "token": (user_payload or {}).get("token", "")
     }
 
 

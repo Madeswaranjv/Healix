@@ -101,11 +101,13 @@ class SessionService:
                   );
                 """)
 
-                # Clean up empty orphan sessions with 0 messages
+                # Clean up empty orphan sessions with 0 messages only if older than 10 minutes
+                now_ts = time.time()
                 cursor.execute("""
                 DELETE FROM sessions 
-                WHERE (SELECT COUNT(*) FROM messages WHERE session_id = sessions.id) = 0;
-                """)
+                WHERE created_at < ?
+                  AND (SELECT COUNT(*) FROM messages WHERE session_id = sessions.id) = 0;
+                """, (now_ts - 600,))
                 conn.commit()
             except Exception as e:
                 logger.debug(f"Session cleanup skipped: {e}")

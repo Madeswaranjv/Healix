@@ -86,6 +86,29 @@ class UserService:
             row = cursor.fetchone()
             return self._row_to_dict(row)
 
+    def get_user_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a user by email, ID, or preferred name with deterministic priority."""
+        if not identifier:
+            return None
+        clean_id = identifier.strip()
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            # 1. Exact match on email (case-insensitive)
+            cursor.execute("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (clean_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(row)
+            # 2. Exact match on unique user ID
+            cursor.execute("SELECT * FROM users WHERE id = ?", (clean_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(row)
+            # 3. Match on preferred name (most recently active/created first)
+            cursor.execute("SELECT * FROM users WHERE LOWER(preferred_name) = LOWER(?) ORDER BY updated_at DESC", (clean_id,))
+            row = cursor.fetchone()
+            return self._row_to_dict(row)
+
+
     def get_user_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Retrieves a user by active authentication token."""
         if not token:
@@ -146,6 +169,7 @@ class UserService:
         now = time.time()
         pw_hash = hash_password(password) if password else ""
         token = secrets.token_hex(24)
+        email_clean = email.strip() if email else ""
 
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -157,9 +181,9 @@ class UserService:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 uid,
-                full_name,
-                preferred_name or full_name.split()[0],
-                email,
+                full_name.strip(),
+                (preferred_name or full_name.split()[0]).strip(),
+                email_clean,
                 pw_hash,
                 token,
                 age,
@@ -178,12 +202,13 @@ class UserService:
         user = self.get_user(uid)
         return user
 
-    def authenticate(self, email: str, password: str) -> Optional[Dict[str, Any]]:
-        """Authenticates user with email and password, returning user dict + token if valid."""
-        user = self.get_user_by_email(email)
+    def authenticate(self, identifier: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticates user with email or username and password, returning user dict + token if valid."""
+        clean_id = (identifier or "").strip()
+        user = self.get_user_by_identifier(clean_id)
         if not user:
             # Check if default user matches email or name
-            if email in ("jane.doe@example.com", "jane.doe@healix.ai", "user_default", "demo"):
+            if clean_id.lower() in ("jane.doe@example.com", "jane.doe@healix.ai", "user_default", "demo", "jane"):
                 user = self.get_or_create_default_user()
             else:
                 return None

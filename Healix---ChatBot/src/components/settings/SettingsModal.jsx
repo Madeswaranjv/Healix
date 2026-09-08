@@ -208,6 +208,29 @@ export default function SettingsModal() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Sync formData with active userProfile when modal opens or user switches
+  useEffect(() => {
+    if (isSettingsModalOpen && userProfile) {
+      setFormData({
+        fullName: userProfile.fullName || '',
+        preferredName: userProfile.preferredName || '',
+        email: userProfile.email || '',
+        age: userProfile.age || '',
+        gender: userProfile.gender || 'Female',
+        bloodGroup: userProfile.bloodGroup || 'O+',
+        allergies: Array.isArray(userProfile.allergies) ? [...userProfile.allergies] : [],
+        chronicConditions: Array.isArray(userProfile.chronicConditions) ? [...userProfile.chronicConditions] : [],
+        currentMedications: Array.isArray(userProfile.currentMedications) ? [...userProfile.currentMedications] : [],
+        emergencyContact: {
+          name: userProfile.emergencyContact?.name || '',
+          phone: userProfile.emergencyContact?.phone || '',
+          relation: userProfile.emergencyContact?.relation || '',
+        },
+      });
+    }
+  }, [userProfile, isSettingsModalOpen]);
+
+
   if (!isSettingsModalOpen) return null;
 
   const handleSave = async () => {

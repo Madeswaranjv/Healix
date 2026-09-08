@@ -195,6 +195,8 @@ export const useStore = create((set, get) => ({
         isAuthenticated: true,
         isAuthModalOpen: false,
         activeConversationId: null,
+        conversations: [],
+        messages: {},
         userProfile: {
           id: user.id,
           fullName: user.full_name,
@@ -223,7 +225,7 @@ export const useStore = create((set, get) => ({
     const res = await registerUser(payload);
     if (res && res.user) {
       const user = res.user;
-      const token = user.token || '';
+      const token = res.token || user.token || '';
       localStorage.setItem('healix_auth_token', token);
       localStorage.setItem('healix_user_id', user.id);
 
@@ -233,6 +235,8 @@ export const useStore = create((set, get) => ({
         isAuthenticated: true,
         isAuthModalOpen: false,
         activeConversationId: null,
+        conversations: [],
+        messages: {},
         userProfile: {
           id: user.id,
           fullName: user.full_name,
