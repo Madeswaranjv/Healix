@@ -4,27 +4,27 @@ import { useStore } from '../../store/useStore';
 
 const MODELS = [
   {
-    name: 'Ling 3.0',
-    options: ['Ling 3.0 Flash'],
+    name: 'Asclepius',
+    options: ['Asclepius Flash'],
   },
   {
-    name: 'MiniMax',
-    options: ['MiniMax M3', 'MiniMax M2.7'],
+    name: 'Cortex',
+    options: ['Cortex M3', 'Cortex M2.7'],
   },
   {
-    name: 'Gemma 4',
-    options: ['Gemma 4 31B'],
+    name: 'Helix',
+    options: ['Helix 4 Pro'],
   },
   {
-    name: 'Nemotron 3',
-    options: ['Nemotron 3 Super', 'Nemotron 3.5 Lightning', 'Nemotron 3 Nano Omni'],
+    name: 'Aether',
+    options: ['Aether 3 Super', 'Aether 3.5 Lightning', 'Aether 3 Nano'],
   },
   {
-    name: 'Liquid LFM',
+    name: 'Salve',
     options: [],
   },
   {
-    name: 'Dots 3 Note',
+    name: 'Rx Neuron',
     options: [],
   }
 ];

@@ -43,19 +43,19 @@ class LLMService:
 
     # Friendly name to OpenRouter model mapping (Verified Active & Operational)
     MODEL_MAP = {
-        "Ling 3.0 Flash": "inclusionai/ling-3.0-flash-fin:free",
-        "Ling 3.0": "inclusionai/ling-3.0-flash-fin:free",
-        "MiniMax M3": "minimax/minimax-m3:free",
-        "MiniMax M2.7": "minimax/minimax-m2.7:free",
-        "MiniMax": "minimax/minimax-m3:free",
-        "Gemma 4 31B": "google/gemma-4-31b-it:free",
-        "Gemma 4": "google/gemma-4-31b-it:free",
-        "Nemotron 3 Super": "nvidia/nemotron-3-super-120b-a12b:free",
-        "Nemotron 3.5 Lightning": "nvidia/nemotron-3.5-lightning:free",
-        "Nemotron 3 Nano Omni": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-        "Nemotron 3": "nvidia/nemotron-3-super-120b-a12b:free",
-        "Liquid LFM": "liquid/lfm-2.5-2.6b:free",
-        "Dots 3 Note": "dots-studio/dots-3-note-preview:free",
+        "Asclepius Flash": "inclusionai/ling-3.0-flash-fin:free",
+        "Asclepius": "inclusionai/ling-3.0-flash-fin:free",
+        "Cortex M3": "minimax/minimax-m3:free",
+        "Cortex M2.7": "minimax/minimax-m2.7:free",
+        "Cortex": "minimax/minimax-m3:free",
+        "Helix 4 Pro": "google/gemma-4-31b-it:free",
+        "Helix": "google/gemma-4-31b-it:free",
+        "Aether 3 Super": "nvidia/nemotron-3-super-120b-a12b:free",
+        "Aether 3.5 Lightning": "nvidia/nemotron-3.5-lightning:free",
+        "Aether 3 Nano": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "Aether": "nvidia/nemotron-3-super-120b-a12b:free",
+        "Salve": "liquid/lfm-2.5-2.6b:free",
+        "Rx Neuron": "dots-studio/dots-3-note-preview:free",
     }
 
     def resolve_model(self, model_name: Optional[str]) -> str:

@@ -24,14 +24,20 @@ class VectorStoreService:
             settings=ChromaSettings(anonymized_telemetry=False)
         )
         
-        # Default local sentence transformer embedding function
-        try:
-            self.embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-                model_name=settings.EMBEDDING_MODEL_NAME
-            )
-        except Exception as e:
-            logger.warning(f"Could not load SentenceTransformer embedding function ({e}), using default embedding.")
-            self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        self._embedding_fn = None
+
+    @property
+    def embedding_fn(self):
+        """Lazy-loads the embedding model on first use to ensure instant server boot."""
+        if self._embedding_fn is None:
+            try:
+                self._embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name=settings.EMBEDDING_MODEL_NAME
+                )
+            except Exception as e:
+                logger.warning(f"Could not load SentenceTransformer embedding function ({e}), using default embedding.")
+                self._embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        return self._embedding_fn
 
     def _get_collection_name(self, session_id: str) -> str:
         """Sanitizes and formats collection name per session ID."""

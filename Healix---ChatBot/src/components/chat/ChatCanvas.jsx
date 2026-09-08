@@ -7,7 +7,7 @@ import DisclaimerStrip from './DisclaimerStrip';
 import PulseIndicator from './PulseIndicator';
 import IconButton from '../common/IconButton';
 import { useStore } from '../../store/useStore';
-import { sendChatMessage, streamChatMessage, uploadDocument, analyzeImage, checkBackendHealth } from '../../services/api';
+import { sendChatMessage, streamChatMessage, uploadDocument, analyzeImage, checkBackendHealth, API_BASE } from '../../services/api';
 
 /**
  * Main chat canvas — centered message column, inline-editable title header.
@@ -339,7 +339,7 @@ export default function ChatCanvas() {
             const errorMessage = {
               id: `msg-${Date.now()}-err`,
               role: 'assistant',
-              content: `**Connection Error:** Unable to reach the Healix backend at \`http://localhost:8000\`.\n\n*Error details: ${err.message}*\n\nPlease make sure your FastAPI backend is running and that your OpenRouter API key is configured in \`backend/.env\`.`,
+              content: `**Connection Error:** Unable to reach the Healix backend at \`${API_BASE}\`.\n\n*Error details: ${err.message}*\n\nPlease make sure your FastAPI backend service is running and properly configured.`,
               timestamp: Date.now(),
               sources: [],
             };

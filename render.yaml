@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: healix-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        value: http://localhost:5173
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1

@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd Healix---ChatBot && npm install && npm run build",
+  "outputDirectory": "Healix---ChatBot/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

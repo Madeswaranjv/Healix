@@ -33,20 +33,41 @@ app = FastAPI(
 )
 
 # CORS configuration
-origins = [
-    settings.FRONTEND_ORIGIN,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "*"
+# Parse FRONTEND_ORIGIN (supports single URL, comma-separated URLs, or '*')
+configured_origins = [
+    origin.strip()
+    for origin in settings.FRONTEND_ORIGIN.split(",")
+    if origin.strip()
 ]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Standard local dev origins
+default_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
+# Build distinct list of allowed origins
+allowed_origins = list(dict.fromkeys(configured_origins + default_origins))
+
+if "*" in allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_origin_regex=r"^https:\/\/.*\.vercel\.app$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # ==========================================
@@ -135,6 +156,17 @@ class ChatResponse(BaseModel):
 # ==========================================
 # Health & Status
 # ==========================================
+
+@app.get("/")
+async def root_status():
+    """Root health check endpoint for deployment health pingers."""
+    return {
+        "status": "healthy",
+        "service": "Healix Healthcare AI Backend",
+        "version": "1.1.0",
+        "docs": "/docs"
+    }
+
 
 @app.get("/health")
 async def health_check():
@@ -708,5 +740,8 @@ async def reset_entire_session(session_id: str):
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run("app.main:app", host=settings.HOST, port=settings.PORT, reload=True)
+    run_port = int(os.environ.get("PORT", settings.PORT))
+    run_reload = os.environ.get("RELOAD", "false").lower() in ("true", "1")
+    uvicorn.run("app.main:app", host=settings.HOST, port=run_port, reload=run_reload)
