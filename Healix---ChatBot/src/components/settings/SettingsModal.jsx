@@ -621,7 +621,6 @@ export default function SettingsModal() {
                       className={`flex-1 p-2 rounded-xl border-2 transition-all duration-150 ${theme === 'light' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
                       <div className="relative w-full h-24 rounded-lg mb-2 shadow-sm overflow-hidden border border-border flex items-center justify-center p-[2px]">
-                        <img src="/woodbg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
                         <img src="/f1.png" alt="Light theme preview" className="relative w-full h-full object-cover rounded-lg shadow-sm border border-black/10" />
                       </div>
                       <span className="text-sm font-medium text-ink">Light Mode</span>
@@ -631,7 +630,6 @@ export default function SettingsModal() {
                       className={`flex-1 p-2 rounded-xl border-2 transition-all duration-150 ${theme === 'dark' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}
                     >
                       <div className="relative w-full h-24 rounded-lg mb-2 shadow-sm overflow-hidden border border-border flex items-center justify-center p-[2px]">
-                        <img src="/woodbg.jpeg" alt="" className="absolute inset-0 w-full h-full object-cover" />
                         <img src="/f2.png" alt="Dark theme preview" className="relative w-full h-full object-cover rounded-lg shadow-sm border border-white/10" />
                       </div>
                       <span className="text-sm font-medium text-ink">Dark Mode</span>

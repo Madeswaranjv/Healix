@@ -124,7 +124,7 @@ export default function ChatCanvas() {
       targetConvId = `conv-${Date.now()}`;
       const titlePrompt = text || (attachments.length > 0 ? `Analysis: ${attachments[0].name}` : 'Consultation');
       const title = titlePrompt.slice(0, 36) + (titlePrompt.length > 36 ? '...' : '');
-      
+
       const newConv = {
         id: targetConvId,
         title,

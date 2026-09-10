@@ -100,12 +100,25 @@ function renderTable(tableLines, key) {
   }
 
   return (
-    <div key={key} className="my-3.5 overflow-x-auto rounded-xl border border-table-border shadow-xs bg-table-bg">
+    <div
+      key={key}
+      className="my-3.5 overflow-x-auto rounded-xl border border-table-border bg-surface"
+      style={{
+        boxShadow:
+          '0 4px 24px rgba(0,0,0,0.10), 0 1.5px 6px rgba(0,85,204,0.08)',
+      }}
+    >
       <table className="w-full text-left text-xs border-collapse min-w-[320px]">
         <thead>
-          <tr className="bg-table-header border-b border-table-border text-ink font-semibold">
+          <tr
+            className="border-b border-table-border"
+            style={{ background: 'var(--color-table-header)' }}
+          >
             {headerRow.map((col, ci) => (
-              <th key={ci} className="px-3.5 py-2.5 font-semibold text-ink tracking-tight">
+              <th
+                key={ci}
+                className="px-3.5 py-2.5 font-bold tracking-tight text-ink"
+              >
                 {renderInline(col)}
               </th>
             ))}
@@ -113,7 +126,25 @@ function renderTable(tableLines, key) {
         </thead>
         <tbody className="divide-y divide-table-border/60">
           {bodyRows.map((row, ri) => (
-            <tr key={ri} className="hover:bg-accent-soft/50 transition-colors duration-100 odd:bg-table-bg even:bg-table-alt">
+            <tr
+              key={ri}
+              className="transition-colors duration-100"
+              style={{
+                background:
+                  ri % 2 === 0
+                    ? 'var(--color-table-bg)'
+                    : 'var(--color-table-alt)',
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = 'var(--color-accent-soft)')
+              }
+              onMouseLeave={(e) =>
+              (e.currentTarget.style.background =
+                ri % 2 === 0
+                  ? 'var(--color-table-bg)'
+                  : 'var(--color-table-alt)')
+              }
+            >
               {row.map((cell, ci) => (
                 <td key={ci} className="px-3.5 py-2 text-ink/90 leading-relaxed align-top">
                   {renderInline(cell)}
@@ -339,7 +370,7 @@ export default function MessageBubble({ message, onResend, onEdit }) {
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-5 group`}>
-      <div className={`max-w-[85%] lg:max-w-[75%] ${isUser ? '' : 'flex gap-3'}`}>
+      <div className={`${isUser ? 'max-w-[85%] lg:max-w-[75%]' : 'w-full pr-9'} ${isUser ? '' : 'flex gap-3'}`}>
         {/* Healix logo for assistant messages */}
         {!isUser && (
           <div className="flex-shrink-0 mt-1">
