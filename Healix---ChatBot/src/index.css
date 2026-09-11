@@ -28,9 +28,9 @@
   --color-dropdown: #FFFFFF;
   --color-input: #FFFFFF;
   --color-inputborder: #E2E8F0;
-  --color-table-bg: #EEF2F6;
-  --color-table-header: #DFE7F1;
-  --color-table-alt: #E5ECF5;
+  --color-table-bg: #F8FAFC;
+  --color-table-header: #BFDBFE;
+  --color-table-alt: #F8FAFC;
   --color-table-border: #CBD5E1;
 
   /* ---- Interactive State Tokens ---- */
@@ -361,9 +361,9 @@
   --color-dropdown: #FFFFFF;
   --color-input: #FFFFFF;
   --color-inputborder: #E2E8F0;
-  --color-table-bg: #EEF2F6;
-  --color-table-header: #DFE7F1;
-  --color-table-alt: #E5ECF5;
+  --color-table-bg: #F8FAFC;
+  --color-table-header: #c1d9f6;
+  --color-table-alt: #F8FAFC;
   --color-table-border: #CBD5E1;
 
   --color-sidebar-btn-hover: #E6F0FA;
@@ -392,9 +392,9 @@
   --color-dropdown: #262627;
   --color-input: #57555534;
   --color-inputborder: #444343;
-  --color-table-bg: #1A1A1E;
-  --color-table-header: #25252B;
-  --color-table-alt: #151518;
+  --color-table-bg: #1E1E22;
+  --color-table-header: #1E3A5F;
+  --color-table-alt: #1E1E22;
   --color-table-border: #2C2D2E;
 
   --color-sidebar-btn-hover: #1E293B;

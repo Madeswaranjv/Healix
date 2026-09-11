@@ -579,3 +579,76 @@ export async function getSupportedVoiceLanguages() {
     };
   }
 }
+// ==========================================
+// Files APIs
+// ==========================================
+
+/**
+ * Create a new file for a user
+ * @param {string} userId
+ * @param {Object} params
+ * @param {string} params.title
+ * @param {string} params.type - 'md', 'txt', or 'pdf'
+ * @param {string} params.content
+ */
+export async function createFile(userId = 'user_default', { title = 'Untitled', type = 'md', content = '' } = {}) {
+  const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, type, content }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Failed to create file (${res.status})`);
+  }
+  return await res.json();
+}
+
+/**
+ * List all files for a user
+ * @param {string} userId
+ */
+export async function fetchUserFiles(userId = 'user_default') {
+  const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/files`);
+  if (!res.ok) return [];
+  return await res.json();
+}
+
+/**
+ * Fetch a single file by ID
+ * @param {string} fileId
+ */
+export async function fetchFile(fileId) {
+  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(fileId)}`);
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+/**
+ * Update a file's content and/or title
+ * @param {string} fileId
+ * @param {Object} updates
+ * @param {string} [updates.content]
+ * @param {string} [updates.title]
+ */
+export async function updateFile(fileId, { content, title } = {}) {
+  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(fileId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, title }),
+  });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+/**
+ * Delete a file
+ * @param {string} fileId
+ */
+export async function deleteFile(fileId) {
+  const res = await fetch(`${API_BASE}/files/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+  });
+  if (!res.ok) return false;
+  return await res.json();
+}

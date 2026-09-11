@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, FolderOpen } from 'lucide-react';
 import EmptyState from './EmptyState';
 import MessageList from './MessageList';
 import Composer from './Composer';
@@ -37,6 +37,10 @@ export default function ChatCanvas() {
     addIndexedDoc,
     backendConnected,
     setBackendConnected,
+    toggleFilesPanel,
+    isFilesPanelOpen,
+    setFilesPanelOpen,
+    loadUserFiles,
   } = useStore();
 
   const [editingTitle, setEditingTitle] = useState(false);
@@ -124,7 +128,7 @@ export default function ChatCanvas() {
       targetConvId = `conv-${Date.now()}`;
       const titlePrompt = text || (attachments.length > 0 ? `Analysis: ${attachments[0].name}` : 'Consultation');
       const title = titlePrompt.slice(0, 36) + (titlePrompt.length > 36 ? '...' : '');
-      
+
       const newConv = {
         id: targetConvId,
         title,
@@ -301,6 +305,12 @@ export default function ChatCanvas() {
         },
         onToolResult: (tr) => {
           setToolStatus({ type: 'tool_result', ...tr });
+          
+          if (tr.name === 'create_file' || tr.name === 'edit_file') {
+            loadUserFiles();
+            setFilesPanelOpen(true);
+          }
+
           if (tr.sources && tr.sources.length > 0) {
             metadataObj.sources = [...metadataObj.sources, ...tr.sources];
             if (hasStarted) {
@@ -390,7 +400,35 @@ export default function ChatCanvas() {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-canvas h-[100dvh] max-h-[100dvh] overflow-hidden">
+    <div className="flex-1 flex flex-col bg-canvas h-[100dvh] max-h-[100dvh] overflow-hidden relative">
+      {/* Floating Header Actions */}
+      <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+        <div className="relative group/filebtn">
+          <button
+            onClick={toggleFilesPanel}
+            className={`p-2 transition-all duration-200 flex items-center justify-center
+              ${isFilesPanelOpen 
+                ? 'text-primary' 
+                : 'text-muted hover:text-ink'
+              }`}
+            aria-label="Toggle Files Panel"
+          >
+            <FolderOpen size={20} />
+          </button>
+          
+          {/* Custom Tooltip mimicking dropdown background */}
+          <div className="
+            absolute right-0 top-full mt-2
+            px-3 py-1.5 rounded-xl border border-border/60 bg-surface shadow-md
+            text-xs font-semibold text-ink whitespace-nowrap
+            opacity-0 translate-y-1 pointer-events-none
+            group-hover/filebtn:opacity-100 group-hover/filebtn:translate-y-0
+            transition-all duration-200 z-50
+          ">
+            Files Panel
+          </div>
+        </div>
+      </div>
 
       {/* Scrollable messages area — ONLY this container scrolls */}
       <main className="flex-1 overflow-y-auto min-h-0 relative">

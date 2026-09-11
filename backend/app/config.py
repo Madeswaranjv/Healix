@@ -95,6 +95,7 @@ class Settings(BaseSettings):
         description="Bhashini Inference Pipeline URL"
     )
 
+
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env") if (BACKEND_DIR / ".env").is_file() else None,
         env_file_encoding="utf-8",

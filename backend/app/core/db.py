@@ -103,10 +103,25 @@ def init_db():
         )
         """)
 
+        # 5. Files Table (user-scoped file artifacts created by assistant or user)
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS files (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT 'Untitled',
+            type TEXT NOT NULL DEFAULT 'md',
+            content TEXT NOT NULL DEFAULT '',
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+        """)
+
         # Indexes for fast lookup
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_session_docs_session_id ON session_documents(session_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id)")
 
         # Seed default user if not exists
         cursor.execute("SELECT id FROM users WHERE id = 'user_default'")

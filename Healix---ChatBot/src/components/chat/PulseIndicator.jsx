@@ -56,12 +56,21 @@ export default function PulseIndicator({ isWebSearch = false, toolStatus = null 
 
   if (toolStatus) {
     if (toolStatus.type === 'tool_call') {
-      const query = toolStatus.arguments?.query || toolStatus.arguments?.topic || '';
-      const displayQuery = query.length > 40 ? query.slice(0, 38) + '...' : query;
-      displayText = query ? `MCP Search: "${displayQuery}"` : `Executing MCP ${toolStatus.name || 'tool'}...`;
-      customIcon = <Loader2 size={13} className="text-primary animate-spin flex-shrink-0" />;
+      if (toolStatus.name === 'create_file' || toolStatus.name === 'edit_file') {
+        displayText = 'Drafting the pdf / file...';
+        customIcon = <Loader2 size={13} className="text-primary animate-spin flex-shrink-0" />;
+      } else {
+        const query = toolStatus.arguments?.query || toolStatus.arguments?.topic || '';
+        const displayQuery = query.length > 40 ? query.slice(0, 38) + '...' : query;
+        displayText = query ? `MCP Search: "${displayQuery}"` : `Executing MCP ${toolStatus.name || 'tool'}...`;
+        customIcon = <Loader2 size={13} className="text-primary animate-spin flex-shrink-0" />;
+      }
     } else if (toolStatus.type === 'tool_result') {
-      displayText = `Retrieved ${toolStatus.count || 'sources'} medical references`;
+      if (toolStatus.name === 'create_file' || toolStatus.name === 'edit_file') {
+        displayText = 'File successfully created';
+      } else {
+        displayText = `Retrieved ${toolStatus.count || 'sources'} medical references`;
+      }
       customIcon = <CheckCircle2 size={13} className="text-emerald-500 flex-shrink-0" />;
     }
   }

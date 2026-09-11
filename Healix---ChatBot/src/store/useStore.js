@@ -12,6 +12,10 @@ import {
   fetchSessionDetails,
   updateBackendSession,
   deleteBackendSession,
+  fetchUserFiles,
+  createFile as apiCreateFile,
+  updateFile as apiUpdateFile,
+  deleteFile as apiDeleteFile,
 } from '../services/api';
 
 const getStoredFontSize = () => {
@@ -521,4 +525,65 @@ export const useStore = create((set, get) => ({
   isProfileMenuOpen: false,
   toggleProfileMenu: () => set((s) => ({ isProfileMenuOpen: !s.isProfileMenuOpen })),
   setProfileMenuOpen: (open) => set({ isProfileMenuOpen: open }),
+
+  // --- Files Panel ---
+  isFilesPanelOpen: false,
+  setFilesPanelOpen: (open) => set({ isFilesPanelOpen: open }),
+  toggleFilesPanel: () => set((s) => ({ isFilesPanelOpen: !s.isFilesPanelOpen })),
+  filesList: [],
+  activeFileId: null,
+  setActiveFileId: (id) => set({ activeFileId: id }),
+
+  loadUserFiles: async () => {
+    const userId = get().activeUserId || 'user_default';
+    try {
+      const files = await fetchUserFiles(userId);
+      if (Array.isArray(files)) {
+        set({ filesList: files });
+      }
+    } catch (err) {
+      console.warn('Failed to load user files:', err);
+    }
+  },
+
+  createFileRecord: async (title, type = 'md', content = '') => {
+    const userId = get().activeUserId || 'user_default';
+    try {
+      const file = await apiCreateFile(userId, { title, type, content });
+      if (file) {
+        set((s) => ({ filesList: [file, ...s.filesList] }));
+        return file;
+      }
+    } catch (err) {
+      console.error('Failed to create file:', err);
+    }
+    return null;
+  },
+
+  updateFileRecord: async (fileId, content, title) => {
+    try {
+      const updated = await apiUpdateFile(fileId, { content, title });
+      if (updated) {
+        set((s) => ({
+          filesList: s.filesList.map((f) => (f.id === fileId ? updated : f)),
+        }));
+        return updated;
+      }
+    } catch (err) {
+      console.error('Failed to update file:', err);
+    }
+    return null;
+  },
+
+  deleteFileRecord: async (fileId) => {
+    try {
+      await apiDeleteFile(fileId);
+      set((s) => ({
+        filesList: s.filesList.filter((f) => f.id !== fileId),
+        activeFileId: s.activeFileId === fileId ? null : s.activeFileId,
+      }));
+    } catch (err) {
+      console.error('Failed to delete file:', err);
+    }
+  },
 }));
