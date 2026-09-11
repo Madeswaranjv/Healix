@@ -325,7 +325,7 @@ class StreamTagFilter:
 
 
 class LLMService:
-    """Handles communication with OpenRouter's OpenAI-compatible API, supporting MCP tool calling."""
+    """Handles communication with OpenRouter and Google Gemini OpenAI-compatible APIs, supporting MCP tool calling."""
 
     def __init__(self):
         self.api_key = settings.OPENROUTER_API_KEY
@@ -333,7 +333,12 @@ class LLMService:
         self.primary_model = settings.OPENROUTER_CHAT_MODEL
         self.fallback_model = settings.OPENROUTER_CHAT_MODEL_FALLBACK
         self.vision_model = settings.OPENROUTER_VISION_MODEL
-        
+
+        self.gemini_key = getattr(settings, "GEMINI_API_KEY", "")
+        self.gemini_base_url = getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
+        self.gemini_primary = getattr(settings, "GEMINI_MODEL", "gemini-3.8-flash")
+        self.gemini_fallback = getattr(settings, "GEMINI_MODEL_FALLBACK", "gemini-3.7-flash")
+
         self.client = AsyncOpenAI(
             api_key=self.api_key or "sk-dummy-key",
             base_url=self.base_url,
@@ -343,8 +348,21 @@ class LLMService:
             }
         )
 
-    # Friendly name to OpenRouter model mapping (Verified Active & Operational)
+        self.gemini_client = AsyncOpenAI(
+            api_key=self.gemini_key or "dummy-key",
+            base_url=self.gemini_base_url
+        ) if self.gemini_key else None
+
+    # Friendly name to model mapping (Verified Active & Operational)
     MODEL_MAP = {
+        # Google Gemini Flagship Free Models
+        "Gemini 3.8 Flash": "gemini-3.8-flash",
+        "Gemini 3.7 Flash": "gemini-3.7-flash",
+        "Gemini": "gemini-3.8-flash",
+        "gemini-3.8-flash": "gemini-3.8-flash",
+        "gemini-3.7-flash": "gemini-3.7-flash",
+
+        # OpenRouter Models (Verified Active)
         "Asclepius Flash": "inclusionai/ling-3.0-flash-fin:free",
         "Asclepius": "inclusionai/ling-3.0-flash-fin:free",
         "Cortex": "cohere/north-mini-code:free",
@@ -360,15 +378,51 @@ class LLMService:
         "Rx Neuron": "dots-studio/dots-3-note-preview:free",
     }
 
+    def is_gemini_model(self, model_id: str) -> bool:
+        """Checks whether the given model name or ID is a Gemini model."""
+        if not model_id:
+            return False
+        return "gemini" in model_id.lower()
+
     def resolve_model(self, model_name: Optional[str]) -> str:
-        """Resolves a model name or ID to an OpenRouter model ID."""
+        """Resolves a model name or ID to an OpenRouter or Gemini model ID."""
         if not model_name:
+            if self.gemini_key:
+                return self.gemini_primary
             return self.primary_model
         if model_name in self.MODEL_MAP:
             return self.MODEL_MAP[model_name]
-        if "/" in model_name:
+        if "/" in model_name or model_name.startswith("gemini-"):
             return model_name
-        return self.primary_model
+        return self.gemini_primary if self.gemini_key else self.primary_model
+
+    def get_execution_plan(self, requested_model: Optional[str]):
+        """Returns a list of (client, model_id, is_gemini) tuples to try in order."""
+        target_model = self.resolve_model(requested_model)
+        attempts = []
+
+        if self.is_gemini_model(target_model):
+            # Target is Gemini
+            if self.gemini_client:
+                attempts.append((self.gemini_client, target_model, True))
+                # Add fallback Gemini model
+                fb = self.gemini_fallback if target_model != self.gemini_fallback else "gemini-3.7-flash"
+                if fb != target_model:
+                    attempts.append((self.gemini_client, fb, True))
+            # OpenRouter fallback if configured
+            if self.api_key and self.client:
+                attempts.append((self.client, self.fallback_model, False))
+        else:
+            # Target is OpenRouter
+            if self.api_key and self.client:
+                attempts.append((self.client, target_model, False))
+                if target_model != self.fallback_model:
+                    attempts.append((self.client, self.fallback_model, False))
+            # Gemini fallback if configured
+            if self.gemini_client:
+                attempts.append((self.gemini_client, self.gemini_fallback, True))
+
+        return attempts
 
     async def generate_chat_response(
         self,
@@ -385,24 +439,21 @@ class LLMService:
         Returns:
             Dict containing 'answer' (str), 'sources' (list of dicts), and 'tool_calls' (list).
         """
-        if not self.api_key:
+        attempts = self.get_execution_plan(model)
+        if not attempts:
             return {
                 "answer": (
-                    "**Notice:** OpenRouter API key is not configured in backend `.env`. "
-                    "Please add `OPENROUTER_API_KEY` to enable real-time healthcare AI responses."
+                    "**Notice:** Neither Gemini API key nor OpenRouter API key is configured in backend `.env`. "
+                    "Please add `GEMINI_API_KEY` or `OPENROUTER_API_KEY` to enable real-time healthcare AI responses."
                 ),
                 "sources": [],
                 "tool_calls": []
             }
 
-        target_model = self.resolve_model(model)
-        models_to_try = [target_model]
-        if target_model != self.fallback_model:
-            models_to_try.append(self.fallback_model)
-
-        for current_model in models_to_try:
+        last_error = None
+        for current_client, current_model, is_gem in attempts:
             try:
-                logger.info(f"Querying chat model: {current_model} (tools={'enabled' if tools else 'none'})")
+                logger.info(f"Querying chat model: {current_model} (gemini={is_gem}, tools={'enabled' if tools else 'none'})")
                 working_messages = list(messages)
                 accumulated_sources = []
                 executed_tool_calls = []
@@ -410,7 +461,7 @@ class LLMService:
                 if tools:
                     # Multi-turn tool execution loop (up to 2 turns of tools)
                     for turn in range(2):
-                        response = await self.client.chat.completions.create(
+                        response = await current_client.chat.completions.create(
                             model=current_model,
                             messages=working_messages,
                             tools=tools if turn == 0 else None,
@@ -435,8 +486,6 @@ class LLMService:
 
                                 func_args["user_id"] = user_id
                                 executed_tool_calls.append({"name": func_name, "args": func_args})
-                                
-                                # Execute MCP tool
                                 tool_result = await mcp_service.execute_tool(func_name, func_args)
                                 if tool_result.sources:
                                     accumulated_sources.extend(tool_result.sources)
@@ -448,18 +497,20 @@ class LLMService:
                                     "content": tool_result.content
                                 })
 
-                        # Fallback check for text/XML tool calls emitted in message.content
-                        elif turn == 0 and parse_text_tool_calls(message.content or "", default_query=user_query):
-                            text_calls = parse_text_tool_calls(message.content or "", default_query=user_query)
-                            logger.info(f"[LLM Tool Turn {turn+1}] Model {current_model} emitted {len(text_calls)} text XML tool call(s).")
-                            for tc in text_calls:
+                        # Check XML-based tool calls in text
+                        elif parse_text_tool_calls(message.content or "", default_query=user_query):
+                            xml_calls = parse_text_tool_calls(message.content or "", default_query=user_query)
+                            logger.info(f"[LLM Tool Turn {turn+1}] Model {current_model} emitted {len(xml_calls)} text XML tool call(s).")
+                            for tc in xml_calls:
                                 func_name = tc["name"]
                                 func_args = tc["args"]
                                 func_args["user_id"] = user_id
                                 executed_tool_calls.append({"name": func_name, "args": func_args})
                                 tool_result = await mcp_service.execute_tool(func_name, func_args)
+                                executed_tool_calls.append({"name": func_name, "args": func_args})
                                 if tool_result.sources:
                                     accumulated_sources.extend(tool_result.sources)
+
                                 working_messages.append({
                                     "role": "system",
                                     "content": f"[Tool Result for '{func_name}']:\n{tool_result.content}"
@@ -653,7 +704,7 @@ class LLMService:
                         "role": "system",
                         "content": synth
                     })
-                    final_response = await self.client.chat.completions.create(
+                    final_response = await current_client.chat.completions.create(
                         model=current_model,
                         messages=working_messages,
                         temperature=temperature,
@@ -668,7 +719,7 @@ class LLMService:
 
                 else:
                     # Direct generation without tools
-                    response = await self.client.chat.completions.create(
+                    response = await current_client.chat.completions.create(
                         model=current_model,
                         messages=working_messages,
                         temperature=temperature,
@@ -682,10 +733,22 @@ class LLMService:
                     }
 
             except Exception as e:
+                last_error = e
                 logger.warning(f"Model {current_model} failed with error: {e}. Trying fallback if available...")
 
+        error_message = "I apologize, but I am currently experiencing connection difficulties with our AI inference provider. Please try again in a moment."
+        if last_error:
+            err_text = str(last_error).lower()
+            if "429" in str(last_error) or "rate limit" in err_text or "quota" in err_text or "free-models-per-day" in err_text:
+                error_message = (
+                    "**API Rate / Quota Limit Reached (429):** The inference provider reported a rate or quota limit.\n\n"
+                    "Please wait a few moments or switch to another model using the model selector."
+                )
+            elif "401" in str(last_error) or "unauthorized" in err_text or "invalid api key" in err_text:
+                error_message = "**Invalid API Key (401):** The API key provided was rejected. Please verify your credentials in `backend/.env`."
+
         return {
-            "answer": "I apologize, but I am currently experiencing connection difficulties with our AI inference provider. Please try again in a moment.",
+            "answer": error_message,
             "sources": [],
             "tool_calls": []
         }
@@ -700,7 +763,7 @@ class LLMService:
         user_query: str = "",
         user_id: str = "user_default",
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Yields structured streaming events from OpenRouter with MCP tool execution and fallback support.
+        """Yields structured streaming events from OpenRouter or Gemini with MCP tool execution and fallback support.
         
         Yielded event schema:
             - {"type": "tool_call", "name": str, "arguments": dict}
@@ -708,30 +771,27 @@ class LLMService:
             - {"type": "delta", "content": str}
             - {"type": "done", "sources": list}
         """
-        if not self.api_key:
+        attempts = self.get_execution_plan(model)
+        if not attempts:
             yield {
                 "type": "delta",
                 "content": (
-                    "**Notice:** OpenRouter API key is not configured in backend `.env`. "
-                    "Please add `OPENROUTER_API_KEY` to enable real-time healthcare AI responses."
+                    "**Notice:** Neither Gemini API key nor OpenRouter API key is configured in backend `.env`. "
+                    "Please add `GEMINI_API_KEY` or `OPENROUTER_API_KEY` to enable real-time healthcare AI responses."
                 )
             }
             return
 
-        target_model = self.resolve_model(model)
-        models_to_try = [target_model]
-        if target_model != self.fallback_model:
-            models_to_try.append(self.fallback_model)
-
-        for current_model in models_to_try:
+        last_error = None
+        for current_client, current_model, is_gem in attempts:
             try:
-                logger.info(f"Streaming from chat model: {current_model} (tools={'enabled' if tools else 'none'})")
+                logger.info(f"Streaming from chat model: {current_model} (gemini={is_gem}, tools={'enabled' if tools else 'none'})")
                 working_messages = list(messages)
                 accumulated_sources = []
 
                 if tools:
                     # Check for tool calls first
-                    initial_resp = await self.client.chat.completions.create(
+                    initial_resp = await current_client.chat.completions.create(
                         model=current_model,
                         messages=working_messages,
                         tools=tools,
@@ -1030,7 +1090,7 @@ class LLMService:
                             )
                             working_messages.append({"role": "system", "content": synth})
 
-                            stream_resp = await self.client.chat.completions.create(
+                            stream_resp = await current_client.chat.completions.create(
                                 model=current_model,
                                 messages=working_messages,
                                 temperature=temperature,
@@ -1038,11 +1098,16 @@ class LLMService:
                                 stream=True
                             )
                             tag_filter = StreamTagFilter()
-                            async for chunk in stream_resp:
-                                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                                    filtered = tag_filter.process(chunk.choices[0].delta.content)
-                                    if filtered:
-                                        yield {"type": "delta", "content": filtered}
+                            try:
+                                async for chunk in stream_resp:
+                                    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                                        filtered = tag_filter.process(chunk.choices[0].delta.content)
+                                        if filtered:
+                                            yield {"type": "delta", "content": filtered}
+                            finally:
+                                if hasattr(stream_resp, "close"):
+                                    await stream_resp.close()
+
                             remaining = tag_filter.flush()
                             if remaining:
                                 yield {"type": "delta", "content": remaining}
@@ -1136,7 +1201,7 @@ class LLMService:
                         )
                     })
                     try:
-                        file_gen_resp = await self.client.chat.completions.create(
+                        file_gen_resp = await current_client.chat.completions.create(
                             model=current_model,
                             messages=file_gen_messages,
                             temperature=temperature,
@@ -1170,7 +1235,7 @@ class LLMService:
                     except Exception as file_err:
                         logger.warning(f"[LLM Stream] Direct file creation path failed: {file_err}. Falling back to normal stream.")
 
-                stream_resp = await self.client.chat.completions.create(
+                stream_resp = await current_client.chat.completions.create(
                     model=current_model,
                     messages=working_messages,
                     temperature=temperature,
@@ -1178,14 +1243,19 @@ class LLMService:
                     stream=True
                 )
                 tag_filter = StreamTagFilter()
-                async for chunk in stream_resp:
-                    if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                        filtered = tag_filter.process(chunk.choices[0].delta.content)
-                        if filtered:
-                            yield {
-                                "type": "delta",
-                                "content": filtered
-                            }
+                try:
+                    async for chunk in stream_resp:
+                        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                            filtered = tag_filter.process(chunk.choices[0].delta.content)
+                            if filtered:
+                                yield {
+                                    "type": "delta",
+                                    "content": filtered
+                                }
+                finally:
+                    if hasattr(stream_resp, "close"):
+                        await stream_resp.close()
+
                 remaining = tag_filter.flush()
                 if remaining:
                     yield {
@@ -1199,11 +1269,23 @@ class LLMService:
                 return
 
             except Exception as e:
+                last_error = e
                 logger.warning(f"Streaming with model {current_model} failed: {e}. Trying fallback if available...")
+
+        error_message = "I apologize, but I am currently experiencing connection difficulties with our AI inference provider. Please try again in a moment."
+        if last_error:
+            err_text = str(last_error).lower()
+            if "429" in str(last_error) or "rate limit" in err_text or "quota" in err_text or "free-models-per-day" in err_text:
+                error_message = (
+                    "**API Rate / Quota Limit Reached (429):** The inference provider reported a rate or quota limit.\n\n"
+                    "Please wait a few moments or switch to another model using the model selector."
+                )
+            elif "401" in str(last_error) or "unauthorized" in err_text or "invalid api key" in err_text:
+                error_message = "**Invalid API Key (401):** The API key provided was rejected. Please verify your credentials in `backend/.env`."
 
         yield {
             "type": "delta",
-            "content": "I apologize, but I am currently experiencing connection difficulties with our AI inference provider. Please try again in a moment."
+            "content": error_message
         }
 
     async def analyze_image(
@@ -1213,10 +1295,10 @@ class LLMService:
         question: str = "Please inspect and describe the visible details in this healthcare image."
     ) -> str:
         """Performs visual analysis on medical images or lab sheets using vision LLMs."""
-        if not self.api_key:
+        if not self.api_key and not self.gemini_key:
             return (
-                "**Notice:** OpenRouter API key is not configured in backend `.env`. "
-                "Please add `OPENROUTER_API_KEY` to enable vision analysis."
+                "**Notice:** Neither Gemini API key nor OpenRouter API key is configured in backend `.env`. "
+                "Please configure an API key to enable vision analysis."
             )
 
         b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -1233,23 +1315,26 @@ class LLMService:
             },
         ]
 
-        # Try vision model
-        try:
-            logger.info(f"Querying vision model: {self.vision_model}")
-            response = await self.client.chat.completions.create(
-                model=self.vision_model,
-                messages=messages,
-                max_tokens=1200
-            )
-            if response.choices and response.choices[0].message.content:
-                return response.choices[0].message.content.strip()
-        except Exception as e:
-            logger.warning(f"Vision model {self.vision_model} failed ({e}). Attempting fallback vision models...")
-            
-            fallback_vision_models = ["google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]
-            for f_model in fallback_vision_models:
+        # 1. Prefer Gemini for vision if configured (outstanding clinical image analysis speed and fidelity)
+        if self.gemini_client:
+            for gemini_vision_model in [self.gemini_fallback, self.gemini_model]:
                 try:
-                    logger.info(f"Attempting fallback vision model: {f_model}")
+                    logger.info(f"Querying Gemini vision model: {gemini_vision_model}")
+                    response = await self.gemini_client.chat.completions.create(
+                        model=gemini_vision_model,
+                        messages=messages,
+                        max_tokens=1500
+                    )
+                    if response.choices and response.choices[0].message.content:
+                        return response.choices[0].message.content.strip()
+                except Exception as g_err:
+                    logger.warning(f"Gemini vision model {gemini_vision_model} failed: {g_err}")
+
+        # 2. Fall back to OpenRouter vision models if available
+        if self.api_key and self.client:
+            for f_model in [self.vision_model, "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]:
+                try:
+                    logger.info(f"Attempting OpenRouter vision model: {f_model}")
                     response = await self.client.chat.completions.create(
                         model=f_model,
                         messages=messages,
@@ -1258,7 +1343,7 @@ class LLMService:
                     if response.choices and response.choices[0].message.content:
                         return response.choices[0].message.content.strip()
                 except Exception as fb_err:
-                    logger.warning(f"Fallback vision model {f_model} failed: {fb_err}")
+                    logger.warning(f"OpenRouter vision model {f_model} failed: {fb_err}")
 
         return (
             "Unable to analyze the image at this moment due to provider rate limits or image processing constraints. "

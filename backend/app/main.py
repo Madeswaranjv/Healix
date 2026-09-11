@@ -207,8 +207,10 @@ async def health_check():
         "app": "Healix Healthcare Backend",
         "vectorstore": "ready",
         "embedding_model": settings.OPENROUTER_EMBEDDING_MODEL,
-        "chat_model": settings.OPENROUTER_CHAT_MODEL,
-        "vision_model": settings.OPENROUTER_VISION_MODEL
+        "chat_model": settings.GEMINI_MODEL if settings.GEMINI_API_KEY else settings.OPENROUTER_CHAT_MODEL,
+        "gemini_model": getattr(settings, "GEMINI_MODEL", "gemini-3.8-flash"),
+        "gemini_configured": bool(getattr(settings, "GEMINI_API_KEY", "")),
+        "vision_model": getattr(settings, "GEMINI_MODEL_FALLBACK", "gemini-3.7-flash") if getattr(settings, "GEMINI_API_KEY", "") else settings.OPENROUTER_VISION_MODEL
     }
 
 
@@ -596,7 +598,7 @@ async def chat(request: ChatRequest):
         session_id=session_id,
         role="assistant",
         content=final_answer,
-        model=request.model or settings.OPENROUTER_CHAT_MODEL,
+        model=request.model or (settings.GEMINI_MODEL if settings.GEMINI_API_KEY else settings.OPENROUTER_CHAT_MODEL),
         sources=sources,
         is_emergency=is_emergency,
         chunks_used=len(context_chunks),
@@ -718,7 +720,7 @@ async def chat_stream(request: ChatRequest):
             session_id=session_id,
             role="assistant",
             content=full_answer,
-            model=request.model or settings.OPENROUTER_CHAT_MODEL,
+            model=request.model or (settings.GEMINI_MODEL if settings.GEMINI_API_KEY else settings.OPENROUTER_CHAT_MODEL),
             sources=sources,
             is_emergency=is_emergency,
             chunks_used=len(context_chunks),

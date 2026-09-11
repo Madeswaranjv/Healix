@@ -13,6 +13,21 @@ class Settings(BaseSettings):
     OPENROUTER_API_KEY: str = Field(default="", description="Single OpenRouter API Key for all models")
     OPENROUTER_BASE_URL: str = Field(default="https://openrouter.ai/api/v1", description="OpenRouter API Base URL")
     
+    # Google Gemini Settings (Direct API)
+    GEMINI_API_KEY: str = Field(default="", description="Google Gemini API Key")
+    GEMINI_BASE_URL: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai/",
+        description="Gemini OpenAI-compatible endpoint URL"
+    )
+    GEMINI_MODEL: str = Field(
+        default="gemini-3.8-flash",
+        description="Most powerful free model from Gemini"
+    )
+    GEMINI_MODEL_FALLBACK: str = Field(
+        default="gemini-3.7-flash",
+        description="Gemini fallback model"
+    )
+    
     # Text / RAG Models
     OPENROUTER_CHAT_MODEL: str = Field(
         default="inclusionai/ling-3.0-flash-fin:free",

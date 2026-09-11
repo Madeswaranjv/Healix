@@ -4,6 +4,10 @@ import { useStore } from '../../store/useStore';
 
 const MODELS = [
   {
+    name: 'Gemini',
+    options: ['Gemini 3.8 Flash', 'Gemini 3.7 Flash'],
+  },
+  {
     name: 'Asclepius',
     options: ['Asclepius Flash'],
   },
@@ -122,7 +126,12 @@ export default function ModelSelector() {
                     }
                   }}
                 >
-                  <span className="truncate">{model.name}</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{model.name}</span>
+                    {hasSubmenu && model.options.includes(selectedModel) && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                    )}
+                  </div>
                   {hasSubmenu && (
                     <ChevronRight 
                       size={14} 

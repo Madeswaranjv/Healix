@@ -504,7 +504,7 @@ export const useStore = create((set, get) => ({
   },
 
   // Active Model selection
-  selectedModel: 'Asclepius Flash',
+  selectedModel: 'Gemini 3.8 Flash',
   setSelectedModel: (model) => set({ selectedModel: model }),
 
   // Web search toggle
