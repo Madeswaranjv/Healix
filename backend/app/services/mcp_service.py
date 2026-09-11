@@ -10,6 +10,7 @@ from typing import List, Dict, Any, Optional, Callable
 from pydantic import BaseModel, Field
 
 from app.services.search_service import search_service
+from app.services.file_service import file_service
 
 logger = logging.getLogger("healix.mcp")
 
@@ -102,6 +103,68 @@ class MCPService:
             handler=self._handle_clinical_guidelines_search
         )
 
+        # 3. Create File
+        self.register_tool(
+            name="create_file",
+            description=(
+                "Create a new markdown or text file for the user. Use this tool when the user asks "
+                "you to create, write, draft, or generate a document, note, report, summary, or file. "
+                "Provide the full content as markdown. The file will be saved and visible in the user's Files panel. "
+                "IMPORTANT: Do NOT output the document content or tables in the chat response. Provide only a brief, abstract confirmation message (e.g. 'I've drafted the document for you.')."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "Title of the file (e.g., 'Diabetes Management Plan')."
+                    },
+                    "type": {
+                        "type": "string",
+                        "description": "File type: 'md' for markdown or 'txt' for plain text.",
+                        "enum": ["md", "txt"],
+                        "default": "md"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Full content of the file in markdown or plain text format."
+                    },
+                    "user_id": {
+                        "type": "string",
+                        "description": "User ID of the file owner.",
+                        "default": "user_default"
+                    }
+                },
+                "required": ["title", "content"]
+            },
+            handler=self._handle_create_file
+        )
+
+        # 4. Edit File
+        self.register_tool(
+            name="edit_file",
+            description=(
+                "Edit an existing file's content. Use this tool when the user wants to modify, update, "
+                "or revise a previously created file. Provide the file ID and the complete new content. "
+                "IMPORTANT: Do NOT output the document content or tables in the chat response. Provide only a brief, abstract confirmation message."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "file_id": {
+                        "type": "string",
+                        "description": "The ID of the file to edit."
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "The complete updated content for the file."
+                    }
+                },
+                "required": ["file_id", "new_content"]
+            },
+            handler=self._handle_edit_file
+        )
+
     def register_tool(
         self,
         name: str,
@@ -151,6 +214,10 @@ class MCPService:
             "searchmedical_guidelines": "search_medical_guidelines",
             "search_medical_guidelines": "search_medical_guidelines",
             "medicalguidelines": "search_medical_guidelines",
+            "createfile": "create_file",
+            "create_file": "create_file",
+            "editfile": "edit_file",
+            "edit_file": "edit_file",
         }
         resolved_name = tool_alias_map.get(normalized, name)
 
@@ -307,6 +374,94 @@ class MCPService:
             sources=sources,
             raw_data={"topic": topic, "organization": organization, "count": len(raw_results)}
         )
+
+    async def _handle_create_file(self, args: Dict[str, Any]) -> MCPToolResult:
+        """Handler for 'create_file' MCP tool."""
+        title = (args.get("title") or "Untitled").strip()
+        file_type = (args.get("type") or "md").strip()
+        content = (args.get("content") or "").strip()
+        user_id = (args.get("user_id") or "user_default").strip()
+
+        if not content:
+            return MCPToolResult(
+                tool_name="create_file",
+                success=False,
+                content="File content cannot be empty.",
+                sources=[]
+            )
+
+        try:
+            file_record = file_service.create_file(
+                user_id=user_id,
+                title=title,
+                file_type=file_type,
+                content=content
+            )
+            return MCPToolResult(
+                tool_name="create_file",
+                success=True,
+                content=f"Successfully created file '{title}'. Do not output the file content in chat.",
+                sources=[{
+                    "id": f"file-{file_record['id']}",
+                    "file_id": file_record["id"],
+                    "title": title,
+                    "type": "file",
+                    "file_type": file_type
+                }],
+                raw_data={"file_id": file_record["id"], "title": title, "type": file_type}
+            )
+        except Exception as e:
+            logger.error(f"[MCP] create_file error: {e}", exc_info=True)
+            return MCPToolResult(
+                tool_name="create_file",
+                success=False,
+                content=f"Failed to create file: {str(e)}",
+                sources=[]
+            )
+
+    async def _handle_edit_file(self, args: Dict[str, Any]) -> MCPToolResult:
+        """Handler for 'edit_file' MCP tool."""
+        file_id = (args.get("file_id") or "").strip()
+        new_content = (args.get("new_content") or "").strip()
+
+        if not file_id:
+            return MCPToolResult(
+                tool_name="edit_file",
+                success=False,
+                content="file_id is required to edit a file.",
+                sources=[]
+            )
+
+        try:
+            updated = file_service.update_file(file_id=file_id, content=new_content)
+            if not updated:
+                return MCPToolResult(
+                    tool_name="edit_file",
+                    success=False,
+                    content=f"File '{file_id}' not found.",
+                    sources=[]
+                )
+            return MCPToolResult(
+                tool_name="edit_file",
+                success=True,
+                content=f"Successfully updated file '{updated.get('title', file_id)}'. Do not output the file content in chat.",
+                sources=[{
+                    "id": f"file-{file_id}",
+                    "file_id": file_id,
+                    "title": updated.get("title", "Updated File"),
+                    "type": "file",
+                    "file_type": updated.get("type", "md")
+                }],
+                raw_data={"file_id": file_id, "title": updated.get("title")}
+            )
+        except Exception as e:
+            logger.error(f"[MCP] edit_file error: {e}", exc_info=True)
+            return MCPToolResult(
+                tool_name="edit_file",
+                success=False,
+                content=f"Failed to edit file: {str(e)}",
+                sources=[]
+            )
 
 
 # Singleton instance

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2 } from 'lucide-react';
 import SourceChips from './SourceChips';
+import FileCard from './FileCard';
+import SpeakerButton from './SpeakerButton';
 import { useStore } from '../../store/useStore';
 
 /**
@@ -108,7 +110,7 @@ function renderTable(tableLines, key) {
           '0 4px 24px rgba(0,0,0,0.10), 0 1.5px 6px rgba(0,85,204,0.08)',
       }}
     >
-      <table className="w-full text-left text-xs border-collapse min-w-[320px]">
+      <table className="w-full table-fixed text-left text-xs border-collapse min-w-[320px]">
         <thead>
           <tr
             className="border-b border-table-border"
@@ -312,14 +314,20 @@ function renderMarkdown(text) {
 
 export default function MessageBubble({ message, onResend, onEdit }) {
   const { theme } = useStore();
-  const { id, role, content, timestamp, sources, isStreaming } = message;
+  const { id, role, content, timestamp, sources = [], attachments = [], isEmergency, isStreaming } = message;
   const isUser = role === 'user';
 
   const [copied, setCopied] = useState(false);
-  const [liked, setLiked] = useState(false);
   const [shared, setShared] = useState(false);
+  const [liked, setLiked] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(content);
+  const [editText, setEditText] = useState(content || '');
+
+  const safeSources = sources || [];
+  const safeAttachments = attachments || [];
+
+  const webSources = safeSources.filter(s => s.type !== 'file');
+  const fileSources = safeSources.filter(s => s.type === 'file');
 
   const handleCopy = async () => {
     try {
@@ -504,10 +512,19 @@ export default function MessageBubble({ message, onResend, onEdit }) {
             </div>
           )}
 
-          {/* Source chips for Assistant */}
-          {!isUser && sources && sources.length > 0 && (
+          {/* Source chips for Assistant (web links / references) */}
+          {!isUser && webSources.length > 0 && (
             <div className="mt-2">
-              <SourceChips sources={sources} />
+              <SourceChips sources={webSources} />
+            </div>
+          )}
+
+          {/* Render File Cards for created/edited files */}
+          {!isUser && fileSources.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {fileSources.map((fs, idx) => (
+                <FileCard key={`file-${idx}`} fileInfo={fs} />
+              ))}
             </div>
           )}
 
@@ -589,6 +606,9 @@ export default function MessageBubble({ message, onResend, onEdit }) {
               </div>
             ) : (
               <div className="flex items-center gap-1 mt-1.5">
+                {/* Assistant Action: Speaker / Read Aloud Button (Bhashini TTS) */}
+                <SpeakerButton text={content} />
+
                 {/* Assistant Action: Copy Button with floating tooltip */}
                 <button
                   onClick={handleCopy}

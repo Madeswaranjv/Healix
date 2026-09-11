@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar, MobileSidebarDrawer } from './components/sidebar/Sidebar';
 import ChatCanvas from './components/chat/ChatCanvas';
+import FilesPanel from './components/files/FilesPanel';
 import AllConversationsPage from './pages/AllConversationsPage';
 import AboutModal from './pages/AboutModal';
 import SettingsModal from './components/settings/SettingsModal';
@@ -24,6 +25,7 @@ function AppShell({ children }) {
       <AboutModal />
       <SettingsModal />
       {children}
+      <FilesPanel />
     </div>
   );
 }

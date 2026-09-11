@@ -14,10 +14,12 @@ from app.services.document_parser import process_uploaded_document
 from app.services.vector_service import vector_service
 from app.services.search_service import search_service
 from app.services.mcp_service import mcp_service
-from app.services.llm_service import llm_service
+from app.services.llm_service import llm_service, clean_tool_markup
 from app.services.chat_history import chat_history_manager
 from app.services.user_service import user_service
 from app.services.session_service import session_service
+from app.services.file_service import file_service
+from app.routes.voice import router as voice_router
 
 # Setup logging
 logging.basicConfig(
@@ -69,6 +71,9 @@ else:
         allow_headers=["*"],
     )
 
+# Register Voice I/O routes (Bhashini TTS & STT)
+app.include_router(voice_router, prefix="/api/voice", tags=["Voice"])
+app.include_router(voice_router, prefix="/voice", tags=["Voice"])
 
 # ==========================================
 # Pydantic Request & Response Schemas
@@ -136,6 +141,17 @@ class SessionUpdateRequest(BaseModel):
     title: Optional[str] = None
     pinned: Optional[bool] = None
     model: Optional[str] = None
+
+
+class FileCreateRequest(BaseModel):
+    title: str = Field(default="Untitled", description="File title")
+    type: str = Field(default="md", pattern="^(md|txt|pdf)$", description="File type: md, txt, or pdf")
+    content: str = Field(default="", description="File content (markdown or plain text)")
+
+
+class FileUpdateRequest(BaseModel):
+    content: Optional[str] = Field(default=None, description="Updated file content")
+    title: Optional[str] = Field(default=None, description="Updated file title")
 
 
 class ChatRequest(BaseModel):
@@ -386,6 +402,60 @@ async def get_session_messages(session_id: str, limit: int = Query(default=100, 
 
 
 # ==========================================
+# File Management Endpoints
+# ==========================================
+
+@app.post("/users/{user_id}/files")
+async def create_user_file(user_id: str, request: FileCreateRequest):
+    """Creates a new file record for a user."""
+    return file_service.create_file(
+        user_id=user_id,
+        title=request.title,
+        file_type=request.type,
+        content=request.content
+    )
+
+
+@app.get("/users/{user_id}/files")
+async def list_user_files(
+    user_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0)
+):
+    """Lists all files belonging to a user, ordered by recency."""
+    return file_service.list_user_files(user_id, limit=limit, offset=offset)
+
+
+@app.get("/files/{file_id}")
+async def get_file(file_id: str):
+    """Retrieves a specific file by ID."""
+    f = file_service.get_file(file_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="File not found")
+    return f
+
+
+@app.patch("/files/{file_id}")
+async def update_file(file_id: str, request: FileUpdateRequest):
+    """Updates a file's content and/or title."""
+    updated = file_service.update_file(
+        file_id=file_id,
+        content=request.content,
+        title=request.title
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="File not found")
+    return updated
+
+
+@app.delete("/files/{file_id}")
+async def delete_file(file_id: str):
+    """Deletes a file record."""
+    deleted = file_service.delete_file(file_id)
+    return {"status": "success" if deleted else "not_found", "file_id": file_id}
+
+
+# ==========================================
 # Core AI Chat & RAG Pipeline
 # ==========================================
 
@@ -500,6 +570,7 @@ async def chat(request: ChatRequest):
         model=request.model,
         tools=tools,
         user_query=user_query,
+        user_id=user_id,
     )
     raw_answer = llm_result.get("answer", "")
     web_sources = llm_result.get("sources", [])
@@ -604,6 +675,7 @@ async def chat_stream(request: ChatRequest):
             model=request.model,
             tools=tools,
             user_query=user_query,
+            user_id=user_id,
         ):
             event_type = event.get("type")
             
@@ -632,7 +704,7 @@ async def chat_stream(request: ChatRequest):
                     if not any(existing.get("url") == s.get("url") for existing in sources):
                         sources.append(s)
 
-        full_answer = "".join(accumulated_chunks)
+        full_answer = clean_tool_markup("".join(accumulated_chunks))
 
         # 4. Save user & assistant records in SQLite & memory
         session_service.add_message(

@@ -9,9 +9,25 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.core.prompts import VISION_ANALYSIS_SYSTEM_PROMPT
 from app.services.mcp_service import mcp_service
+from app.services.file_service import file_service
 
 logger = logging.getLogger("healix.llm")
 
+# Keywords that indicate the user wants a file/document created
+_FILE_INTENT_KEYWORDS = re.compile(
+    r"\b(create|draft|generate|produce|write|make|prepare|give|build|compile|put)\b.{0,60}\b(file|pdf|document|doc|report|note|summary|paper|article|md|markdown|text)\b",
+    re.IGNORECASE
+)
+
+# Secondary patterns: "as a pdf", "in a file", "into a document", "in pdf form", etc.
+_FILE_INTENT_SUFFIX = re.compile(
+    r"\b(as|in|into|to)\s+(a\s+)?(pdf|file|document|doc|report|note|summary|text|markdown|md)\b",
+    re.IGNORECASE
+)
+
+def _is_file_request(query: str) -> bool:
+    """Returns True if the user query indicates they want a file/document created."""
+    return bool(_FILE_INTENT_KEYWORDS.search(query) or _FILE_INTENT_SUFFIX.search(query))
 
 def parse_text_tool_calls(text: str, default_query: str = "") -> List[Dict[str, Any]]:
     """Detects text/XML tool calls (e.g. <toolcall>, <dotsfunctioncall>, <tool_call>) emitted by models."""
@@ -20,6 +36,44 @@ def parse_text_tool_calls(text: str, default_query: str = "") -> List[Dict[str, 
         return calls
 
     lower = text.lower()
+    
+    # Custom fallback for tagless tool dumps (create_file, web_search, etc.)
+    if "<toolcall" not in lower:
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        if len(lines) >= 3:
+            first_line = lines[0].lower()
+            if "create_file" in first_line and "filename" in lower and "content" in lower:
+                c = ""
+                t = "Untitled"
+                content_idx = -1
+                for i, l in enumerate(lines):
+                    if l.lower() == "content" or "content" in l.lower():
+                        content_idx = i
+                        break
+                if content_idx > 0:
+                    t = lines[content_idx - 1]
+                    if t.lower().endswith("content"):
+                        t = t[:-7].strip()
+                    c = "\n".join(lines[content_idx + 1:])
+                    calls.append({"name": "create_file", "args": {"title": t, "content": c, "type": "md"}})
+                    return calls
+            elif "web_search" in first_line or "search_medical_guidelines" in first_line or "websearch" in first_line:
+                # Look for the query string
+                q = ""
+                for i, l in enumerate(lines):
+                    if l.lower() in ("query", "5query", "topic"):
+                        if i + 1 < len(lines):
+                            q = lines[i + 1]
+                        break
+                if not q and len(lines) > 1:
+                    # If we couldn't find the 'query' keyword, maybe it's just the last line
+                    q = lines[-1]
+                
+                if q:
+                    tool_name = "web_search" if "web" in first_line else "search_medical_guidelines"
+                    calls.append({"name": tool_name, "args": {"query": q, "topic": q}})
+                    return calls
+
     if not any(tag in lower for tag in ["<toolcall", "<tool_call", "<dotsfunctioncall", "<invoke"]):
         return calls
 
@@ -55,9 +109,23 @@ def parse_text_tool_calls(text: str, default_query: str = "") -> List[Dict[str, 
         if not val_match:
             val_match = re.search(r"<query>(.*?)</query>", block, re.DOTALL | re.IGNORECASE)
 
-        q = val_match.group(1).strip() if val_match else default_query
-        if q:
-            calls.append({"name": tool_name, "args": {"query": q, "topic": q}})
+        if tool_name == "create_file" or tool_name == "edit_file":
+            content_match = re.search(r"<content>(.*?)</content>", block, re.DOTALL | re.IGNORECASE)
+            title_match = re.search(r"<title>(.*?)</title>", block, re.DOTALL | re.IGNORECASE)
+            file_id_match = re.search(r"<file_id>(.*?)</file_id>", block, re.DOTALL | re.IGNORECASE)
+            
+            c = content_match.group(1).strip() if content_match else ""
+            t = title_match.group(1).strip() if title_match else "Untitled"
+            fid = file_id_match.group(1).strip() if file_id_match else ""
+            
+            if tool_name == "create_file":
+                calls.append({"name": tool_name, "args": {"title": t, "content": c, "type": "md"}})
+            else:
+                calls.append({"name": tool_name, "args": {"file_id": fid, "new_content": c}})
+        else:
+            q = val_match.group(1).strip() if val_match else default_query
+            if q:
+                calls.append({"name": tool_name, "args": {"query": q, "topic": q}})
 
     if not calls and default_query:
         tool_name = "search_medical_guidelines" if "guideline" in lower else "web_search"
@@ -70,6 +138,11 @@ def clean_tool_markup(text: str) -> str:
     """Removes raw XML tool markup (e.g. <toolcall>, <dotsfunctioncall>, <tool_call>, etc.) if output by LLMs in text."""
     if not text:
         return ""
+    if "create_file" in text.lower() and "filename" in text.lower() and "content" in text.lower() and "<toolcall" not in text.lower():
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        if len(lines) >= 3 and "create_file" in lines[0].lower():
+            return ""
+
     patterns = [
         r"<dotsfunctioncall[^>]*>.*?</dotsfunctioncall>",
         r"<tool_call>.*?</tool_call>",
@@ -85,19 +158,68 @@ def clean_tool_markup(text: str) -> str:
     cleaned = text
     for pat in patterns:
         cleaned = re.sub(pat, "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+
+    # Strip raw text-based tool dumps (no XML tags): e.g. "web_search\nmax_results\n5\nquery\n..." or "create_file\nfilename\n..."
+    # Match a tool name at the start of a line, followed by parameter-like lines
+    cleaned = re.sub(
+        r"(?:^|\n)(?:web_search|search_medical_guidelines|create_file|edit_file|websearch)\s*\n"
+        r"(?:(?:max_results|query|topic|filename|content|file_id|new_content|type|title|results|5query|5|10|3)\s*\n)*"
+        r"[^\n]*(?:\n|$)",
+        "\n", cleaned, flags=re.IGNORECASE
+    )
+
+    # Also catch the full multi-line dump pattern where the tool name line is followed by
+    # any number of short lines that look like params/values, ending at a double newline
+    cleaned = re.sub(
+        r"(?:^|\n)(?:web_search|search_medical_guidelines|create_file|edit_file)\s*\n"
+        r"(?:[^\n]{0,50}\n){1,8}",
+        "\n", cleaned, flags=re.IGNORECASE
+    )
+
     cleaned = re.sub(r"\n\s*\n\s*\n", "\n\n", cleaned)
     return cleaned.strip()
 
 
 class StreamTagFilter:
-    """Filters out XML/tool-calling markup from streaming tokens in real time."""
+    """Filters out XML/tool-calling markup AND raw text-based tool dumps from streaming tokens in real time."""
     TAG_REGEX = re.compile(
         r"</?(?:dotsfunctioncall|toolcall|tool_call|invoke|argkey|argvalue|arg_key|arg_value|searchmedicalguidelines|searchmedical_guidelines|websearch|web_search)[^>]*>",
         re.IGNORECASE
     )
 
+    # Known raw tool names and parameter keywords that models sometimes dump as plain text
+    _TOOL_NAMES = {"web_search", "search_medical_guidelines", "create_file", "edit_file", "websearch"}
+    _TOOL_PARAM_KEYWORDS = {
+        "max_results", "query", "topic", "filename", "content", "file_id",
+        "new_content", "type", "title", "5query", "max_result", "results",
+    }
+
     def __init__(self):
         self.buffer = ""
+        self._line_buffer = ""           # Accumulates full lines for raw-dump detection
+        self._suppressing = False        # True when we're in the middle of a raw tool dump
+        self._suppress_line_count = 0    # How many lines we've suppressed so far
+        self._max_suppress_lines = 15    # Safety cap — stop suppressing after N lines
+
+    def _is_tool_dump_start(self, line: str) -> bool:
+        """Check if a line looks like the beginning of a raw text-based tool dump."""
+        stripped = line.strip().lower().rstrip(":")
+        return stripped in self._TOOL_NAMES
+
+    def _is_tool_param_line(self, line: str) -> bool:
+        """Check if a line looks like a raw tool parameter name or value."""
+        stripped = line.strip().lower().rstrip(":")
+        # Direct match to known param keywords
+        if stripped in self._TOOL_PARAM_KEYWORDS:
+            return True
+        # Looks like a number (e.g. "5" for max_results value)
+        if stripped.isdigit() and len(stripped) <= 3:
+            return True
+        # Parameter combined with value like "5query" or "max_results5"
+        for kw in self._TOOL_PARAM_KEYWORDS:
+            if kw in stripped and len(stripped) < len(kw) + 10:
+                return True
+        return False
 
     def process(self, chunk: str) -> str:
         self.buffer += chunk
@@ -107,31 +229,99 @@ class StreamTagFilter:
             if "<" in self.buffer:
                 idx = self.buffer.find("<")
                 if idx > 0:
-                    out.append(self.buffer[:idx])
+                    pre_text = self.buffer[:idx]
                     self.buffer = self.buffer[idx:]
+                    filtered_pre = self._filter_raw_dumps(pre_text)
+                    if filtered_pre:
+                        out.append(filtered_pre)
 
                 close_idx = self.buffer.find(">")
                 if close_idx != -1:
                     tag = self.buffer[:close_idx + 1]
                     self.buffer = self.buffer[close_idx + 1:]
                     if not self.TAG_REGEX.match(tag):
-                        out.append(tag)
+                        filtered_tag = self._filter_raw_dumps(tag)
+                        if filtered_tag:
+                            out.append(filtered_tag)
                 else:
                     if len(self.buffer) > 60:
-                        out.append(self.buffer[0])
+                        filtered_char = self._filter_raw_dumps(self.buffer[0])
+                        if filtered_char:
+                            out.append(filtered_char)
                         self.buffer = self.buffer[1:]
                     break
             else:
-                out.append(self.buffer)
+                filtered = self._filter_raw_dumps(self.buffer)
+                if filtered:
+                    out.append(filtered)
                 self.buffer = ""
                 break
 
         return "".join(out)
 
+    def _filter_raw_dumps(self, text: str) -> str:
+        """Filter out raw text-based tool dumps line by line."""
+        if not text:
+            return ""
+
+        self._line_buffer += text
+        out_lines = []
+
+        while "\n" in self._line_buffer:
+            line_end = self._line_buffer.index("\n")
+            line = self._line_buffer[:line_end]
+            self._line_buffer = self._line_buffer[line_end + 1:]
+
+            if self._suppressing:
+                self._suppress_line_count += 1
+                # Keep suppressing tool param lines; stop at safety cap or when we hit real content
+                if self._suppress_line_count >= self._max_suppress_lines:
+                    self._suppressing = False
+                    self._suppress_line_count = 0
+                elif self._is_tool_param_line(line) or line.strip() == "":
+                    continue  # Suppress this line
+                else:
+                    # This line doesn't look like a param — stop suppressing
+                    # But DON'T emit this line if it's clearly a query string following tool params
+                    # (i.e. short content right after "query" or "5query")
+                    if self._suppress_line_count <= 3:
+                        # Still within the tool call header area — suppress the query value too
+                        continue
+                    self._suppressing = False
+                    self._suppress_line_count = 0
+                    out_lines.append(line + "\n")
+            elif self._is_tool_dump_start(line):
+                # Start suppressing
+                self._suppressing = True
+                self._suppress_line_count = 1
+                continue
+            else:
+                out_lines.append(line + "\n")
+
+        # If there's remaining content without a newline, only emit if not suppressing
+        # But hold it in the line buffer until we get a full line
+        if not self._suppressing and "\n" not in self._line_buffer:
+            # Check if the partial line itself starts a tool dump
+            if self._line_buffer.strip() and self._is_tool_dump_start(self._line_buffer):
+                # Hold it — don't emit yet, wait for more content
+                pass
+            elif len(self._line_buffer) > 0 and not self._is_tool_dump_start(self._line_buffer.strip()):
+                # Only emit if we're sure it's not a tool name being typed character by character
+                # Wait until we have enough content to decide
+                pass
+
+        return "".join(out_lines)
+
     def flush(self) -> str:
-        res = self.buffer
+        res = self.buffer + self._line_buffer
         self.buffer = ""
-        return self.TAG_REGEX.sub("", res)
+        self._line_buffer = ""
+        self._suppressing = False
+        self._suppress_line_count = 0
+        # Clean both XML tags and raw tool dumps from remaining content
+        cleaned = self.TAG_REGEX.sub("", res)
+        cleaned = clean_tool_markup(cleaned)
+        return cleaned
 
 
 class LLMService:
@@ -188,6 +378,7 @@ class LLMService:
         temperature: float = 0.3,
         max_tokens: int = 1500,
         user_query: str = "",
+        user_id: str = "user_default",
     ) -> Dict[str, Any]:
         """Generates a chat completion with MCP tool-calling loop and model fallbacks.
         
@@ -242,6 +433,7 @@ class LLMService:
                                 except Exception:
                                     func_args = {"query": tc.function.arguments}
 
+                                func_args["user_id"] = user_id
                                 executed_tool_calls.append({"name": func_name, "args": func_args})
                                 
                                 # Execute MCP tool
@@ -263,6 +455,7 @@ class LLMService:
                             for tc in text_calls:
                                 func_name = tc["name"]
                                 func_args = tc["args"]
+                                func_args["user_id"] = user_id
                                 executed_tool_calls.append({"name": func_name, "args": func_args})
                                 tool_result = await mcp_service.execute_tool(func_name, func_args)
                                 if tool_result.sources:
@@ -273,8 +466,36 @@ class LLMService:
                                 })
 
                         else:
-                            # Final answer reached directly
+                            # Final answer reached directly — no tool calls
                             content = clean_tool_markup(message.content or "")
+
+                            # INTERCEPTION: If user wanted a file, redirect content into a file
+                            if content.strip() and _is_file_request(user_query):
+                                logger.info("[LLM] No tool calls but user wants a file. Redirecting content to file creation.")
+                                fallback_title = user_query[:80].strip() or "Document"
+                                try:
+                                    file_record = file_service.create_file(
+                                        user_id=user_id,
+                                        title=fallback_title,
+                                        file_type="md",
+                                        content=content.strip()
+                                    )
+                                    accumulated_sources.append({
+                                        "id": f"file-{file_record['id']}",
+                                        "file_id": file_record["id"],
+                                        "title": fallback_title,
+                                        "type": "file",
+                                        "file_type": "md"
+                                    })
+                                    executed_tool_calls.append({"name": "create_file", "args": {"title": fallback_title}})
+                                    return {
+                                        "answer": f"I have created a comprehensive document titled **{fallback_title}** for you. You can view and download it from the Files panel.",
+                                        "sources": accumulated_sources,
+                                        "tool_calls": executed_tool_calls
+                                    }
+                                except Exception as file_err:
+                                    logger.error(f"[LLM] Direct file creation failed: {file_err}")
+
                             return {
                                 "answer": content.strip(),
                                 "sources": accumulated_sources,
@@ -282,13 +503,155 @@ class LLMService:
                             }
 
                     # Final generation pass after tools
-                    working_messages.append({
-                        "role": "system",
-                        "content": (
+                    executed_names = {tc["name"] for tc in executed_tool_calls}
+                    has_file_tool = bool(executed_names & {"create_file", "edit_file"})
+                    has_search_only = bool(executed_names & {"web_search", "search_medical_guidelines"}) and not has_file_tool
+                    user_wants_file = _is_file_request(user_query)
+
+                    if has_file_tool:
+                        synth = "The file has been successfully created. Now, output ONLY a very brief acknowledgement (1-2 sentences) confirming the file creation. DO NOT output the detailed document content or tables."
+                    elif has_search_only and user_wants_file:
+                        # Collect all search content from tool results for fallback file creation
+                        _search_content_parts = []
+                        for wm in working_messages:
+                            if isinstance(wm, dict) and wm.get("role") in ("tool", "system"):
+                                c = wm.get("content", "")
+                                if "SEARCH RESULTS" in c.upper() or "GUIDELINE EVIDENCE" in c.upper() or "Tool Result" in c:
+                                    _search_content_parts.append(c)
+
+                        # Need a second pass to call create_file
+                        working_messages.append({
+                            "role": "system",
+                            "content": (
+                                "The web search results above contain the information the user needs. "
+                                "The user wants this information saved as a FILE/DOCUMENT. "
+                                "You MUST now call the `create_file` tool with a descriptive title and CLEAN, PROFESSIONALLY FORMATTED content. "
+                                "CRITICAL CONTENT RULES FOR THE FILE: "
+                                "1. SYNTHESIZE the search results into a polished medical document — do NOT copy-paste raw search output. "
+                                "2. Use markdown tables (| Column | Column |) wherever statistics, comparisons, or structured data are involved. "
+                                "3. Do NOT include raw URLs, 'Evidence:' markers, 'Safety Advisory' footers, source citation brackets like [1][2], or search engine metadata. "
+                                "4. Use clear headings (##), bullet points, and professional formatting. "
+                                "5. The document should read like a polished medical report, NOT a search result dump. "
+                                "6. Include source references at the bottom in a clean 'References' section with just the title and URL. "
+                                "Put the SYNTHESIZED content INSIDE the create_file tool call. "
+                                "Do NOT output the content in chat — only a brief 1-2 sentence acknowledgement."
+                            )
+                        })
+                        file_resp = await self.client.chat.completions.create(
+                            model=current_model,
+                            messages=working_messages,
+                            tools=tools,
+                            tool_choice="auto",
+                            temperature=temperature,
+                            max_tokens=max_tokens
+                        )
+                        file_msg = file_resp.choices[0].message
+                        file_created_in_pass = False
+                        if getattr(file_msg, "tool_calls", None) and len(file_msg.tool_calls) > 0:
+                            working_messages.append(file_msg)
+                            for tc in file_msg.tool_calls:
+                                func_name = tc.function.name
+                                try:
+                                    func_args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                                except Exception:
+                                    func_args = {}
+                                func_args["user_id"] = user_id
+                                executed_tool_calls.append({"name": func_name, "args": func_args})
+                                tool_result = await mcp_service.execute_tool(func_name, func_args)
+                                if tool_result.sources:
+                                    accumulated_sources.extend(tool_result.sources)
+                                working_messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc.id,
+                                    "name": func_name,
+                                    "content": tool_result.content
+                                })
+                                if func_name in ("create_file", "edit_file"):
+                                    file_created_in_pass = True
+                        else:
+                            # Text-based fallback for second pass
+                            second_text_calls = parse_text_tool_calls(file_msg.content or "", default_query=user_query)
+                            for tc in second_text_calls:
+                                func_name = tc["name"]
+                                func_args = tc["args"]
+                                func_args["user_id"] = user_id
+                                executed_tool_calls.append({"name": func_name, "args": func_args})
+                                tool_result = await mcp_service.execute_tool(func_name, func_args)
+                                if tool_result.sources:
+                                    accumulated_sources.extend(tool_result.sources)
+                                working_messages.append({
+                                    "role": "system",
+                                    "content": f"[Tool Result for '{func_name}']:\n{tool_result.content}"
+                                })
+                                if func_name in ("create_file", "edit_file"):
+                                    file_created_in_pass = True
+
+                        # FALLBACK: If LLM failed to call create_file, synthesize and create the file directly
+                        if not file_created_in_pass and _search_content_parts:
+                            logger.info("[LLM] LLM did not call create_file in second pass. Synthesizing content and creating file directly.")
+                            fallback_title = user_query[:80].strip() or "Web Search Report"
+                            # Use LLM to synthesize raw search results into clean document content
+                            raw_data = "\n\n".join(_search_content_parts)
+                            synthesis_messages = [
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "You are a professional medical document writer. Transform the raw web search results below "
+                                        "into a clean, well-structured markdown document. RULES: "
+                                        "1. Synthesize and organize the information — do NOT copy-paste raw search output. "
+                                        "2. Use markdown tables (| Column | Column |) for statistics, comparisons, and structured data. "
+                                        "3. Do NOT include 'Evidence:' markers, 'Safety Advisory' footers, or raw search metadata. "
+                                        "4. Use clear headings (## / ###), bullet points, and professional formatting. "
+                                        "5. Add a 'References' section at the end with clean source titles and URLs. "
+                                        "6. The document should read like a polished medical report. "
+                                        "Output ONLY the document content in markdown, nothing else."
+                                    )
+                                },
+                                {
+                                    "role": "user",
+                                    "content": f"Create a professional medical document about: {user_query}\n\nRaw research data:\n\n{raw_data}"
+                                }
+                            ]
+                            try:
+                                synth_resp = await self.client.chat.completions.create(
+                                    model=current_model,
+                                    messages=synthesis_messages,
+                                    temperature=0.3,
+                                    max_tokens=2500
+                                )
+                                fallback_content = synth_resp.choices[0].message.content or raw_data
+                            except Exception as synth_err:
+                                logger.warning(f"[LLM] Content synthesis failed, using cleaned raw data: {synth_err}")
+                                fallback_content = raw_data
+
+                            try:
+                                file_record = file_service.create_file(
+                                    user_id=user_id,
+                                    title=fallback_title,
+                                    file_type="md",
+                                    content=fallback_content
+                                )
+                                accumulated_sources.append({
+                                    "id": f"file-{file_record['id']}",
+                                    "file_id": file_record["id"],
+                                    "title": fallback_title,
+                                    "type": "file",
+                                    "file_type": "md"
+                                })
+                                executed_tool_calls.append({"name": "create_file", "args": {"title": fallback_title}})
+                            except Exception as fallback_err:
+                                logger.error(f"[LLM] Fallback file creation failed: {fallback_err}")
+
+                        synth = "The file has been successfully created with the web search results. Now, output ONLY a very brief acknowledgement (1-2 sentences) confirming the file was created. Do NOT repeat, summarize, or display the web search content, tables, or document body in chat."
+                    else:
+                        synth = (
                             "All requested tool search results have been retrieved and provided above. "
                             "Now formulate your complete, structured clinical consultation response citing "
                             "the retrieved sources ([1], [2]) with clear tables and bullet points."
                         )
+                    working_messages.append({
+                        "role": "system",
+                        "content": synth
                     })
                     final_response = await self.client.chat.completions.create(
                         model=current_model,
@@ -335,6 +698,7 @@ class LLMService:
         temperature: float = 0.3,
         max_tokens: int = 1500,
         user_query: str = "",
+        user_id: str = "user_default",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Yields structured streaming events from OpenRouter with MCP tool execution and fallback support.
         
@@ -393,6 +757,8 @@ class LLMService:
                             except Exception:
                                 func_args = {"query": tc.function.arguments}
 
+                            func_args["user_id"] = user_id
+
                             yield {
                                 "type": "tool_call",
                                 "name": func_name,
@@ -426,6 +792,7 @@ class LLMService:
                             for tc in text_calls:
                                 func_name = tc["name"]
                                 func_args = tc["args"]
+                                func_args["user_id"] = user_id
 
                                 yield {
                                     "type": "tool_call",
@@ -450,40 +817,235 @@ class LLMService:
                                 })
 
                     if has_tool_calls:
-                        # Synthesis prompt instruction for final response
-                        working_messages.append({
-                            "role": "system",
-                            "content": (
+                        # Track which tools already ran
+                        executed_names = set()
+                        if 'text_calls' in locals() and text_calls:
+                            executed_names = {tc["name"] for tc in text_calls}
+                        elif getattr(message, "tool_calls", None):
+                            executed_names = {tc.function.name for tc in message.tool_calls}
+
+                        has_file_tool = bool(executed_names & {"create_file", "edit_file"})
+                        has_search_only = bool(executed_names & {"web_search", "search_medical_guidelines"}) and not has_file_tool
+                        user_wants_file = _is_file_request(user_query)
+
+                        if has_file_tool:
+                            # File already created — just emit brief acknowledgement
+                            synth = "The file has been successfully created. Now, output 2-3 lines summarizing the request and confirming the file creation. DO NOT output the detailed document content or tables."
+                            working_messages.append({"role": "system", "content": synth})
+
+                            stream_resp = await self.client.chat.completions.create(
+                                model=current_model,
+                                messages=working_messages,
+                                temperature=temperature,
+                                max_tokens=300,
+                                stream=True
+                            )
+                            tag_filter = StreamTagFilter()
+                            async for chunk in stream_resp:
+                                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                                    filtered = tag_filter.process(chunk.choices[0].delta.content)
+                                    if filtered:
+                                        yield {"type": "delta", "content": filtered}
+                            remaining = tag_filter.flush()
+                            if remaining:
+                                yield {"type": "delta", "content": remaining}
+
+                        elif has_search_only and user_wants_file:
+                            # Web search finished but user wanted a FILE — do a second pass with create_file tool
+                            logger.info("[LLM Stream] User requested file creation after web search. Invoking create_file in second pass.")
+
+                            # Collect all search content from tool results for fallback file creation
+                            _search_content_parts = []
+                            for wm in working_messages:
+                                if isinstance(wm, dict) and wm.get("role") in ("tool", "system"):
+                                    c = wm.get("content", "")
+                                    if "SEARCH RESULTS" in c.upper() or "GUIDELINE EVIDENCE" in c.upper() or "Tool Result" in c:
+                                        _search_content_parts.append(c)
+
+                            working_messages.append({
+                                "role": "system",
+                                "content": (
+                                    "The web search results above contain the information the user needs. "
+                                    "The user wants this information saved as a FILE/DOCUMENT. "
+                                    "You MUST now call the `create_file` tool with a descriptive title and CLEAN, PROFESSIONALLY FORMATTED content. "
+                                    "CRITICAL CONTENT RULES FOR THE FILE: "
+                                    "1. SYNTHESIZE the search results into a polished medical document — do NOT copy-paste raw search output. "
+                                    "2. Use markdown tables (| Column | Column |) wherever statistics, comparisons, or structured data are involved. "
+                                    "3. Do NOT include raw URLs inline, 'Evidence:' markers, 'Safety Advisory' footers, source citation brackets like [1][2], or search engine metadata. "
+                                    "4. Use clear headings (##), bullet points, and professional formatting. "
+                                    "5. The document should read like a polished medical report, NOT a search result dump. "
+                                    "6. Include source references at the bottom in a clean 'References' section with just the title and URL. "
+                                    "Put the SYNTHESIZED content INSIDE the create_file tool call. "
+                                    "Do NOT output the content in chat — only a brief 1-2 sentence acknowledgement."
+                                )
+                            })
+
+                            # Second LLM call WITH tools so it can call create_file
+                            file_resp = await self.client.chat.completions.create(
+                                model=current_model,
+                                messages=working_messages,
+                                tools=tools,
+                                tool_choice="auto",
+                                temperature=temperature,
+                                max_tokens=max_tokens
+                            )
+                            file_choice = file_resp.choices[0]
+                            file_message = file_choice.message
+
+                            file_created = False
+
+                            # Handle native tool calls from second pass
+                            if getattr(file_message, "tool_calls", None) and len(file_message.tool_calls) > 0:
+                                working_messages.append(file_message)
+                                for tc in file_message.tool_calls:
+                                    func_name = tc.function.name
+                                    try:
+                                        func_args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                                    except Exception:
+                                        func_args = {}
+                                    func_args["user_id"] = user_id
+
+                                    yield {"type": "tool_call", "name": func_name, "arguments": func_args}
+                                    tool_res = await mcp_service.execute_tool(func_name, func_args)
+                                    if tool_res.sources:
+                                        accumulated_sources.extend(tool_res.sources)
+                                    yield {"type": "tool_result", "name": func_name, "sources": tool_res.sources, "count": len(tool_res.sources)}
+
+                                    working_messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tc.id,
+                                        "name": func_name,
+                                        "content": tool_res.content
+                                    })
+                                    if func_name in ("create_file", "edit_file"):
+                                        file_created = True
+                            else:
+                                # Text-based fallback for second pass
+                                second_text_calls = parse_text_tool_calls(file_message.content or "", default_query=user_query)
+                                for tc in second_text_calls:
+                                    func_name = tc["name"]
+                                    func_args = tc["args"]
+                                    func_args["user_id"] = user_id
+                                    yield {"type": "tool_call", "name": func_name, "arguments": func_args}
+                                    tool_res = await mcp_service.execute_tool(func_name, func_args)
+                                    if tool_res.sources:
+                                        accumulated_sources.extend(tool_res.sources)
+                                    yield {"type": "tool_result", "name": func_name, "sources": tool_res.sources, "count": len(tool_res.sources)}
+                                    working_messages.append({
+                                        "role": "system",
+                                        "content": f"[Tool Result for '{func_name}']:\n{tool_res.content}"
+                                    })
+                                    if func_name in ("create_file", "edit_file"):
+                                        file_created = True
+
+                            # FALLBACK: If LLM failed to call create_file, synthesize and create the file directly
+                            if not file_created and _search_content_parts:
+                                logger.info("[LLM Stream] LLM did not call create_file in second pass. Synthesizing content and creating file directly.")
+                                fallback_title = user_query[:80].strip() or "Web Search Report"
+                                # Use LLM to synthesize raw search results into clean document content
+                                raw_data = "\n\n".join(_search_content_parts)
+                                synthesis_messages = [
+                                    {
+                                        "role": "system",
+                                        "content": (
+                                            "You are a professional medical document writer. Transform the raw web search results below "
+                                            "into a clean, well-structured markdown document. RULES: "
+                                            "1. Synthesize and organize the information — do NOT copy-paste raw search output. "
+                                            "2. Use markdown tables (| Column | Column |) for statistics, comparisons, and structured data. "
+                                            "3. Do NOT include 'Evidence:' markers, 'Safety Advisory' footers, or raw search metadata. "
+                                            "4. Use clear headings (## / ###), bullet points, and professional formatting. "
+                                            "5. Add a 'References' section at the end with clean source titles and URLs. "
+                                            "6. The document should read like a polished medical report. "
+                                            "Output ONLY the document content in markdown, nothing else."
+                                        )
+                                    },
+                                    {
+                                        "role": "user",
+                                        "content": f"Create a professional medical document about: {user_query}\n\nRaw research data:\n\n{raw_data}"
+                                    }
+                                ]
+                                try:
+                                    synth_resp = await self.client.chat.completions.create(
+                                        model=current_model,
+                                        messages=synthesis_messages,
+                                        temperature=0.3,
+                                        max_tokens=2500
+                                    )
+                                    fallback_content = synth_resp.choices[0].message.content or raw_data
+                                except Exception as synth_err:
+                                    logger.warning(f"[LLM Stream] Content synthesis failed, using cleaned raw data: {synth_err}")
+                                    fallback_content = raw_data
+
+                                try:
+                                    file_record = file_service.create_file(
+                                        user_id=user_id,
+                                        title=fallback_title,
+                                        file_type="md",
+                                        content=fallback_content
+                                    )
+                                    file_sources = [{
+                                        "id": f"file-{file_record['id']}",
+                                        "file_id": file_record["id"],
+                                        "title": fallback_title,
+                                        "type": "file",
+                                        "file_type": "md"
+                                    }]
+                                    accumulated_sources.extend(file_sources)
+                                    yield {"type": "tool_call", "name": "create_file", "arguments": {"title": fallback_title}}
+                                    yield {"type": "tool_result", "name": "create_file", "sources": file_sources, "count": 1}
+                                    file_created = True
+                                except Exception as fallback_err:
+                                    logger.error(f"[LLM Stream] Fallback file creation failed: {fallback_err}")
+
+                            # Brief acknowledgement after file creation
+                            if file_created:
+                                synth = "The file has been successfully created with the web search results. Now, output ONLY 1-2 sentences confirming the file was created. Do NOT repeat, summarize, or display the web search content, tables, or document body in chat."
+                            else:
+                                synth = "Provide a brief response to the user about their request."
+                            working_messages.append({"role": "system", "content": synth})
+
+                            stream_resp = await self.client.chat.completions.create(
+                                model=current_model,
+                                messages=working_messages,
+                                temperature=temperature,
+                                max_tokens=300,
+                                stream=True
+                            )
+                            tag_filter = StreamTagFilter()
+                            async for chunk in stream_resp:
+                                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                                    filtered = tag_filter.process(chunk.choices[0].delta.content)
+                                    if filtered:
+                                        yield {"type": "delta", "content": filtered}
+                            remaining = tag_filter.flush()
+                            if remaining:
+                                yield {"type": "delta", "content": remaining}
+
+                        else:
+                            # Normal search synthesis (no file creation needed)
+                            synth = (
                                 "All requested tool search results have been retrieved and provided above. "
                                 "Now formulate your complete, structured clinical consultation response citing "
                                 "the retrieved sources ([1], [2]) with clear tables and bullet points."
                             )
-                        })
+                            working_messages.append({"role": "system", "content": synth})
 
-                        # Stream synthesized response after tool execution
-                        stream_resp = await self.client.chat.completions.create(
-                            model=current_model,
-                            messages=working_messages,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            stream=True
-                        )
-                        tag_filter = StreamTagFilter()
-                        async for chunk in stream_resp:
-                            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-                                text_chunk = chunk.choices[0].delta.content
-                                filtered = tag_filter.process(text_chunk)
-                                if filtered:
-                                    yield {
-                                        "type": "delta",
-                                        "content": filtered
-                                    }
-                        remaining = tag_filter.flush()
-                        if remaining:
-                            yield {
-                                "type": "delta",
-                                "content": remaining
-                            }
+                            stream_resp = await self.client.chat.completions.create(
+                                model=current_model,
+                                messages=working_messages,
+                                temperature=temperature,
+                                max_tokens=max_tokens,
+                                stream=True
+                            )
+                            tag_filter = StreamTagFilter()
+                            async for chunk in stream_resp:
+                                if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                                    filtered = tag_filter.process(chunk.choices[0].delta.content)
+                                    if filtered:
+                                        yield {"type": "delta", "content": filtered}
+                            remaining = tag_filter.flush()
+                            if remaining:
+                                yield {"type": "delta", "content": remaining}
 
                         yield {
                             "type": "done",
@@ -491,8 +1053,64 @@ class LLMService:
                         }
                         return
                     else:
-                        # No tool calls made; if content was returned in initial response, yield it directly
+                        # No tool calls made; if content was returned in initial response
                         cleaned_content = clean_tool_markup(message.content or "")
+
+                        # INTERCEPTION: If user wanted a file, redirect content into a file
+                        if cleaned_content.strip() and _is_file_request(user_query):
+                            logger.info("[LLM Stream] No tool calls but user wants a file. Redirecting content to file creation.")
+                            fallback_title = user_query[:80].strip() or "Document"
+
+                            # If the initial response was truncated or too short, do a fresh generation with higher max_tokens
+                            if len(cleaned_content.strip()) < 300:
+                                logger.info("[LLM Stream] Initial content too short, regenerating with higher max_tokens for file.")
+                                file_gen_messages = list(working_messages)
+                                file_gen_messages.append({
+                                    "role": "system",
+                                    "content": (
+                                        "Generate a comprehensive, detailed, professional markdown document for the user's request. "
+                                        "Use markdown tables where applicable. Include all relevant details. "
+                                        "Output ONLY the document content, nothing else."
+                                    )
+                                })
+                                try:
+                                    file_gen_resp = await self.client.chat.completions.create(
+                                        model=current_model,
+                                        messages=file_gen_messages,
+                                        temperature=temperature,
+                                        max_tokens=3000
+                                    )
+                                    cleaned_content = file_gen_resp.choices[0].message.content or cleaned_content
+                                except Exception:
+                                    pass  # Use the original content
+
+                            try:
+                                file_record = file_service.create_file(
+                                    user_id=user_id,
+                                    title=fallback_title,
+                                    file_type="md",
+                                    content=cleaned_content.strip()
+                                )
+                                file_sources = [{
+                                    "id": f"file-{file_record['id']}",
+                                    "file_id": file_record["id"],
+                                    "title": fallback_title,
+                                    "type": "file",
+                                    "file_type": "md"
+                                }]
+                                accumulated_sources.extend(file_sources)
+                                yield {"type": "tool_call", "name": "create_file", "arguments": {"title": fallback_title}}
+                                yield {"type": "tool_result", "name": "create_file", "sources": file_sources, "count": 1}
+                                # Only yield brief acknowledgement, NOT the full content
+                                yield {
+                                    "type": "delta",
+                                    "content": f"I have created a comprehensive document titled **{fallback_title}** for you. You can view and download it from the Files panel."
+                                }
+                                yield {"type": "done", "sources": accumulated_sources}
+                                return
+                            except Exception as file_err:
+                                logger.error(f"[LLM Stream] Direct file creation failed: {file_err}")
+
                         if cleaned_content:
                             yield {
                                 "type": "delta",
@@ -505,6 +1123,53 @@ class LLMService:
                             return
 
                 # Direct stream when tools are not used or initial content was empty
+                # Check if user wants a file — if so, generate content and redirect to file
+                if _is_file_request(user_query):
+                    logger.info("[LLM Stream] Direct stream path — user wants a file. Generating content for file.")
+                    file_gen_messages = list(working_messages)
+                    file_gen_messages.append({
+                        "role": "system",
+                        "content": (
+                            "Generate a comprehensive, detailed, professional markdown document for the user's request. "
+                            "Use markdown tables where applicable. Include all relevant details, structured with clear headings and bullet points. "
+                            "Output ONLY the document content in markdown, nothing else."
+                        )
+                    })
+                    try:
+                        file_gen_resp = await self.client.chat.completions.create(
+                            model=current_model,
+                            messages=file_gen_messages,
+                            temperature=temperature,
+                            max_tokens=3000
+                        )
+                        file_content = file_gen_resp.choices[0].message.content or ""
+                        if file_content.strip():
+                            fallback_title = user_query[:80].strip() or "Document"
+                            file_record = file_service.create_file(
+                                user_id=user_id,
+                                title=fallback_title,
+                                file_type="md",
+                                content=file_content.strip()
+                            )
+                            file_sources = [{
+                                "id": f"file-{file_record['id']}",
+                                "file_id": file_record["id"],
+                                "title": fallback_title,
+                                "type": "file",
+                                "file_type": "md"
+                            }]
+                            accumulated_sources.extend(file_sources)
+                            yield {"type": "tool_call", "name": "create_file", "arguments": {"title": fallback_title}}
+                            yield {"type": "tool_result", "name": "create_file", "sources": file_sources, "count": 1}
+                            yield {
+                                "type": "delta",
+                                "content": f"I have created a comprehensive document titled **{fallback_title}** for you. You can view and download it from the Files panel."
+                            }
+                            yield {"type": "done", "sources": accumulated_sources}
+                            return
+                    except Exception as file_err:
+                        logger.warning(f"[LLM Stream] Direct file creation path failed: {file_err}. Falling back to normal stream.")
+
                 stream_resp = await self.client.chat.completions.create(
                     model=current_model,
                     messages=working_messages,

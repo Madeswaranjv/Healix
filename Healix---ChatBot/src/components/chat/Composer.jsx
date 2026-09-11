@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Paperclip, Image as ImageIcon, Plus, CornerDownLeft, X, File as FileIcon, Globe, Check, Square } from 'lucide-react';
 import ModelSelector from './ModelSelector';
+import MicButton from './MicButton';
 import { useStore } from '../../store/useStore';
 
 /**
@@ -186,6 +187,22 @@ export default function Composer({ onSend, onStop, isGenerating = false, disable
     }
   };
 
+  const handleVoiceTranscript = (transcript) => {
+    if (!transcript) return;
+    setValue((prev) => {
+      const trimmed = prev.trim();
+      return trimmed ? `${trimmed} ${transcript}` : transcript;
+    });
+    // Focus textarea after voice input
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.selectionStart = textareaRef.current.value.length;
+        textareaRef.current.selectionEnd = textareaRef.current.value.length;
+      }
+    }, 50);
+  };
+
   const hasContent = value.trim().length > 0 || attachments.length > 0;
 
   return (
@@ -369,6 +386,13 @@ export default function Composer({ onSend, onStop, isGenerating = false, disable
         {/* Right Controls */}
         <div className="flex items-center gap-1.5">
           <ModelSelector />
+
+          {/* Voice Input Mic Button (Bhashini STT) */}
+          <MicButton
+            onTranscript={handleVoiceTranscript}
+            disabled={disabled || isGenerating}
+            defaultLanguage="ta"
+          />
 
           {/* Send / Stop button */}
           {isGenerating ? (
