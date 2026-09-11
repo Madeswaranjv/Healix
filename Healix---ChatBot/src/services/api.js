@@ -480,3 +480,102 @@ export async function resetEntireSession(sessionId) {
   if (!res.ok) return false;
   return await res.json();
 }
+
+// ==========================================
+// Voice I/O APIs (Bhashini TTS & STT)
+// ==========================================
+
+/**
+ * Synthesize text into speech via Bhashini TTS
+ * @param {Object} params
+ * @param {string} params.text - Clinical text to read aloud
+ * @param {string} [params.language] - Language code (e.g. 'en', 'ta', 'hi', 'te') or 'auto'
+ * @param {string} [params.gender] - Voice gender ('female' or 'male')
+ * @returns {Promise<{ audioContent: string, format: string, language: string }>}
+ */
+export async function synthesizeSpeech({ text, language = 'auto', gender = 'female' }) {
+  const payload = { text, language, gender };
+  let res = await fetch(`${API_BASE}/api/voice/tts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  // Fallback to /voice/tts if route is not under /api
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE}/voice/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Speech synthesis failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Transcribe recorded audio into text via Bhashini ASR (STT)
+ * @param {Object} params
+ * @param {Blob} params.audioBlob - Audio file blob (WAV, WEBM, OGG)
+ * @param {string} [params.language] - Language code (e.g. 'ta', 'en', 'hi', 'te')
+ * @returns {Promise<{ transcript: string, language: string }>}
+ */
+export async function transcribeAudio({ audioBlob, language = 'ta' }) {
+  const formData = new FormData();
+  // Ensure audio filename reflects format
+  const filename = audioBlob.type.includes('wav') ? 'recording.wav' : 'recording.webm';
+  formData.append('file', audioBlob, filename);
+  formData.append('language', language);
+
+  let res = await fetch(`${API_BASE}/api/voice/stt`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  // Fallback to /voice/stt if route is not under /api
+  if (res.status === 404) {
+    res = await fetch(`${API_BASE}/voice/stt`, {
+      method: 'POST',
+      body: formData,
+    });
+  }
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Voice transcription failed (${res.status})`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * Get supported voice languages from backend
+ */
+export async function getSupportedVoiceLanguages() {
+  try {
+    let res = await fetch(`${API_BASE}/api/voice/languages`);
+    if (res.status === 404) {
+      res = await fetch(`${API_BASE}/voice/languages`);
+    }
+    if (!res.ok) throw new Error(`Status ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('Could not fetch voice languages:', err);
+    return {
+      status: 'fallback',
+      languages: [
+        { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
+        { code: 'en', name: 'English', native: 'English' },
+        { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+        { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+        { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
+        { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+      ]
+    };
+  }
+}

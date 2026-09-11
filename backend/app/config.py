@@ -69,6 +69,32 @@ class Settings(BaseSettings):
         description="Max chunks per batch sent to OpenRouter Embeddings API"
     )
 
+    # Bhashini Voice I/O Settings (TTS & STT)
+    BHASHINI_USER_ID: str = Field(default="", description="Optional Bhashini / ULCA User ID")
+    BHASHINI_INFERENCE_API_KEY: str = Field(default="", description="Bhashini Inference API Key")
+    BHASHINI_API_KEY: str = Field(default="", description="General Bhashini API Key")
+    BHASHINI_ULCA_API_KEY: str = Field(default="", description="Bhashini / ULCA API Key")
+    BHASHINI_PIPELINE_ID: str = Field(
+        default="64392f96daac500b55c543cd",
+        description="Bhashini Pipeline ID"
+    )
+    BHASHINI_ASR_SERVICE_ID: str = Field(
+        default="bhashini/iitm/asr-dravidian--gpu--t4",
+        description="Bhashini ASR Service ID (default Dravidian: ta, te, kn, ml)"
+    )
+    BHASHINI_TTS_SERVICE_ID: str = Field(
+        default="Bhashini/IITM/TTS",
+        description="Bhashini TTS Service ID (IIT Madras multilingual TTS)"
+    )
+    BHASHINI_CONFIG_ENDPOINT: str = Field(
+        default="https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline",
+        description="Bhashini Pipeline Config URL"
+    )
+    BHASHINI_INFERENCE_ENDPOINT: str = Field(
+        default="https://dhruva-api.bhashini.gov.in/services/inference/pipeline",
+        description="Bhashini Inference Pipeline URL"
+    )
+
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env") if (BACKEND_DIR / ".env").is_file() else None,
         env_file_encoding="utf-8",

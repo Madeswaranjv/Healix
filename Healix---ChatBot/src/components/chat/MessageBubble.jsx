@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2 } from 'lucide-react';
 import SourceChips from './SourceChips';
+import SpeakerButton from './SpeakerButton';
 import { useStore } from '../../store/useStore';
 
 /**
@@ -558,6 +559,9 @@ export default function MessageBubble({ message, onResend, onEdit }) {
               </div>
             ) : (
               <div className="flex items-center gap-1 mt-1.5">
+                {/* Assistant Action: Speaker / Read Aloud Button (Bhashini TTS) */}
+                <SpeakerButton text={content} />
+
                 {/* Assistant Action: Copy Button with floating tooltip */}
                 <button
                   onClick={handleCopy}

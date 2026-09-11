@@ -18,6 +18,7 @@ from app.services.llm_service import llm_service
 from app.services.chat_history import chat_history_manager
 from app.services.user_service import user_service
 from app.services.session_service import session_service
+from app.routes.voice import router as voice_router
 
 # Setup logging
 logging.basicConfig(
@@ -68,6 +69,10 @@ else:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Register Voice I/O routes (Bhashini TTS & STT)
+app.include_router(voice_router, prefix="/api/voice", tags=["Voice"])
+app.include_router(voice_router, prefix="/voice", tags=["Voice"])
 
 
 # ==========================================
