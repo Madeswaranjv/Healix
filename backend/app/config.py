@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     OPENROUTER_MODEL_LIQUID_LFM: str = Field(default="liquid/lfm-2.5-2.6b:free")
     OPENROUTER_MODEL_DOTS_3_NOTE: str = Field(default="dots-studio/dots-3-note-preview:free")
     
+    # New OpenRouter Models
+    NEX_N2_5_PRO_MODEL: str = Field(default="nex-agi/nex-n2.5-pro:free")
+    LING_3_0_FLASH_VL_MODEL: str = Field(default="inclusionai/ling-3.0-flash-vl:free")
+    OPENROUTER_MODEL_NEX_N2_5_PRO: str = Field(default="nex-agi/nex-n2.5-pro:free")
+    OPENROUTER_MODEL_LING_3_FLASH_VL: str = Field(default="inclusionai/ling-3.0-flash-vl:free")
+    
     # Web Search
     TAVILY_API_KEY: str = Field(default="", description="Optional Tavily Search API Key")
     

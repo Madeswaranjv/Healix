@@ -55,7 +55,12 @@ class SearchService:
     async def _search_tavily(self, query: str, max_results: int = 4, search_type: str = "general") -> List[Dict[str, Any]]:
         """Internal Tavily search executor."""
         medical_query = query
-        if not any(k in query.lower() for k in ["health", "medical", "clinical", "doctor", "treatment", "disease", "symptom", "fda", "guideline", "guidelines"]):
+        healthcare_keywords = [
+            "health", "medical", "clinical", "doctor", "treatment", "disease",
+            "symptom", "fda", "guideline", "guidelines", "pharmacy", "chemist",
+            "medicals", "hospital", "clinic", "dispensary", "drug", "maps", "map"
+        ]
+        if not any(k in query.lower() for k in healthcare_keywords):
             medical_query = f"{query} medical health"
 
         response = await asyncio.to_thread(

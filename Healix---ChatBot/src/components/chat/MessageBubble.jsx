@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2 } from 'lucide-react';
+import { Copy, Check, RotateCcw, Pencil, X, FileText, ExternalLink, ThumbsUp, Share2, MapPin } from 'lucide-react';
 import SourceChips from './SourceChips';
 import FileCard from './FileCard';
 import SpeakerButton from './SpeakerButton';
@@ -17,7 +17,7 @@ function formatTimestamp(ts) {
 }
 
 /**
- * Renders inline text with bold, italic, code, and cleans up raw syntax tokens.
+ * Renders inline text with links, bold, italic, code, and cleans up raw syntax tokens.
  */
 function renderInline(text) {
   if (!text) return null;
@@ -36,16 +36,64 @@ function renderInline(text) {
       );
     }
 
-    const cleanedText = part.replace(/\*\*([^*]+)\*\*/g, '«B»$1«/B»')
+    // Extract markdown links safely into an indexed array
+    const linkMap = [];
+    const withLinksReplaced = part.replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g,
+      (match, label, url) => {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return match;
+          }
+          const index = linkMap.length;
+          linkMap.push({ label, url });
+          return `«LINK_${index}»`;
+        } catch {
+          return match;
+        }
+      }
+    );
+
+    const cleanedText = withLinksReplaced
+      .replace(/\*\*([^*]+)\*\*/g, '«B»$1«/B»')
       .replace(/__([^_]+)__/g, '«B»$1«/B»')
       .replace(/(^|[^\*])\*([^\*]+)\*([^\*]|$)/g, '$1«I»$2«/I»$3')
       .replace(/(^|[^_])_([^_]+)_([^_]|$)/g, '$1«I»$2«/I»$3')
       .replace(/\*\*+/g, '')
       .replace(/##+/g, '');
 
-    const tokens = cleanedText.split(/(«B»[^«]+«\/B»|«I»[^«]+«\/I»)/g);
+    const tokens = cleanedText.split(/(«B»[^«]+«\/B»|«I»[^«]+«\/I»|«LINK_\d+»)/g);
 
     return tokens.map((token, ti) => {
+      const linkMatch = token.match(/^«LINK_(\d+)»$/);
+      if (linkMatch) {
+        const linkData = linkMap[parseInt(linkMatch[1], 10)];
+        if (linkData) {
+          const isMaps =
+            linkData.url.includes('google.com/maps') ||
+            linkData.url.includes('maps.google') ||
+            linkData.url.includes('goo.gl/maps');
+
+          return (
+            <a
+              key={`${ci}-${ti}`}
+              href={linkData.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:text-primary-hover font-medium underline underline-offset-2 transition-colors duration-150 break-words"
+              title={isMaps ? 'Open in Google Maps' : linkData.url}
+            >
+              {isMaps && !linkData.label.includes('📍') && (
+                <MapPin size={13} className="text-primary flex-shrink-0" />
+              )}
+              <span>{linkData.label}</span>
+              <ExternalLink size={11} className="opacity-70 flex-shrink-0 ml-0.5" />
+            </a>
+          );
+        }
+      }
+
       if (token.startsWith('«B»') && token.endsWith('«/B»')) {
         return (
           <strong key={`${ci}-${ti}`} className="font-semibold text-ink">

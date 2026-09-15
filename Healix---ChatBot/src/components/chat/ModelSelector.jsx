@@ -30,6 +30,14 @@ const MODELS = [
   {
     name: 'Rx Neuron',
     options: [],
+  },
+  {
+    name: 'Nex N2.5 Pro',
+    options: [],
+  },
+  {
+    name: 'Ling 3.0 Flash VL',
+    options: [],
   }
 ];
 

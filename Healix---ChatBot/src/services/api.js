@@ -405,12 +405,13 @@ export async function uploadDocument(file, sessionId, userId = 'user_default') {
  * @param {string} sessionId
  * @param {string} [userId='user_default']
  */
-export async function analyzeImage(imageFile, question, sessionId, userId = 'user_default') {
+export async function analyzeImage(imageFile, question, sessionId, userId = 'user_default', model = null) {
   const formData = new FormData();
   formData.append('image', imageFile);
   if (question) formData.append('question', question);
   if (sessionId) formData.append('session_id', sessionId);
   if (userId) formData.append('user_id', userId);
+  if (model) formData.append('model', model);
 
   const res = await fetch(`${API_BASE}/analyze-image`, {
     method: 'POST',

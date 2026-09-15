@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.services.search_service import search_service
 from app.services.file_service import file_service
+from app.core.maps import generate_google_maps_url, extract_local_businesses_from_search
 
 logger = logging.getLogger("healix.mcp")
 
@@ -165,6 +166,39 @@ class MCPService:
             handler=self._handle_edit_file
         )
 
+        # 5. Local Medical Place & Maps Link Tool
+        self.register_tool(
+            name="get_place_maps",
+            description=(
+                "Generate verified Google Maps search and navigation links for specific local pharmacies, "
+                "medical shops, clinics, hospitals, or healthcare providers in a specific area or city. "
+                "Use this tool whenever the user asks for medical shops, locations, addresses, or their Google Maps links."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "Area, city, or pincode (e.g. 'New Ellis Nagar, Madurai - 625016')."
+                    },
+                    "businesses": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string", "description": "Business or medical shop name"},
+                                "address": {"type": "string", "description": "Specific street address or area if known"}
+                            },
+                            "required": ["name"]
+                        },
+                        "description": "List of specific business names to generate Google Maps links for."
+                    }
+                },
+                "required": ["location"]
+            },
+            handler=self._handle_get_place_maps
+        )
+
     def register_tool(
         self,
         name: str,
@@ -218,6 +252,11 @@ class MCPService:
             "create_file": "create_file",
             "editfile": "edit_file",
             "edit_file": "edit_file",
+            "getplacemaps": "get_place_maps",
+            "get_place_maps": "get_place_maps",
+            "placemaps": "get_place_maps",
+            "googlemaps": "get_place_maps",
+            "maplinks": "get_place_maps",
         }
         resolved_name = tool_alias_map.get(normalized, name)
 
@@ -300,9 +339,27 @@ class MCPService:
                 "engine": item.get("engine", "web")
             })
 
+        # Extract structured local businesses and Google Maps search links if query/content indicates medical shops or facilities
+        local_businesses = extract_local_businesses_from_search(query, raw_results)
+        structured_section = ""
+        if local_businesses:
+            business_rows = []
+            for b_idx, b in enumerate(local_businesses):
+                business_rows.append(
+                    f"| {b_idx+1} | {b['name']} | {b['address']} | [View on Google Maps]({b['googleMapsUrl']}) |"
+                )
+            structured_section = (
+                "\n\n### STRUCTURED LOCAL BUSINESSES & VERIFIED GOOGLE MAPS LINKS:\n"
+                "| # | Medical Shop / Facility | Location | Google Maps Link |\n"
+                "|---|---|---|---|\n"
+                + "\n".join(business_rows)
+                + "\n\n*CRITICAL INSTRUCTION: Use the exact clickable Google Maps search links from above in your response table. Format as `[View on Google Maps](URL)` or `[📍 View on Google Maps](URL)`.*"
+            )
+
         compiled_content = (
             f"### LIVE WEB SEARCH RESULTS FOR: '{query}'\n\n"
             + "\n---\n".join(formatted_lines)
+            + structured_section
             + "\n\n*Safety Advisory: Ground your response in the above retrieved facts and cite the URLs/sources.*"
         )
 
@@ -311,7 +368,11 @@ class MCPService:
             success=True,
             content=compiled_content,
             sources=sources,
-            raw_data={"query": query, "count": len(raw_results)}
+            raw_data={
+                "query": query,
+                "count": len(raw_results),
+                "local_businesses": local_businesses
+            }
         )
 
     async def _handle_clinical_guidelines_search(self, args: Dict[str, Any]) -> MCPToolResult:
@@ -462,6 +523,78 @@ class MCPService:
                 content=f"Failed to edit file: {str(e)}",
                 sources=[]
             )
+
+    async def _handle_get_place_maps(self, args: Dict[str, Any]) -> MCPToolResult:
+        """Handler for 'get_place_maps' MCP tool."""
+        location = (args.get("location") or "").strip()
+        businesses_arg = args.get("businesses") or []
+
+        results = []
+        sources = []
+
+        if businesses_arg and isinstance(businesses_arg, list):
+            for idx, b in enumerate(businesses_arg):
+                b_name = (b.get("name") if isinstance(b, dict) else str(b)).strip()
+                b_addr = (b.get("address") if isinstance(b, dict) else "") or location
+                if b_name:
+                    map_url = generate_google_maps_url(b_name, b_addr)
+                    results.append({
+                        "name": b_name,
+                        "address": b_addr,
+                        "googleMapsUrl": map_url
+                    })
+                    sources.append({
+                        "id": f"map-{idx+1}",
+                        "title": f"Google Maps: {b_name}",
+                        "url": map_url,
+                        "type": "web",
+                        "snippet": f"Google Maps navigation link for {b_name} in {b_addr}."
+                    })
+        else:
+            # Search web for medical shops in the location
+            search_query = f"medical shops pharmacies near {location}".strip()
+            raw_results = await search_service.search(query=search_query, max_results=5, search_type="general")
+            extracted = extract_local_businesses_from_search(search_query, raw_results)
+            if extracted:
+                results.extend(extracted)
+                for idx, item in enumerate(extracted):
+                    sources.append({
+                        "id": f"map-{idx+1}",
+                        "title": f"Google Maps: {item['name']}",
+                        "url": item["googleMapsUrl"],
+                        "type": "web",
+                        "snippet": f"Location: {item['address']}"
+                    })
+
+        if not results:
+            return MCPToolResult(
+                tool_name="get_place_maps",
+                success=True,
+                content=f"No specific medical businesses could be verified for location: '{location}'.",
+                sources=[]
+            )
+
+        rows = []
+        for idx, r in enumerate(results):
+            rows.append(
+                f"| {idx+1} | {r['name']} | {r['address']} | [View on Google Maps]({r['googleMapsUrl']}) |"
+            )
+
+        content = (
+            f"### VERIFIED GOOGLE MAPS NAVIGATION LINKS ({location}):\n\n"
+            "| # | Medical Shop / Facility | Location | Google Maps Link |\n"
+            "|---|---|---|---|\n"
+            + "\n".join(rows)
+            + "\n\n*Format your response with the table above using clickable [View on Google Maps](URL) links.*"
+        )
+
+        return MCPToolResult(
+            tool_name="get_place_maps",
+            success=True,
+            content=content,
+            sources=sources,
+            raw_data={"location": location, "businesses": results}
+        )
 
 
 # Singleton instance

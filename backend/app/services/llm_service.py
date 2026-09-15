@@ -376,6 +376,12 @@ class LLMService:
         "Aether": "nvidia/nemotron-3-super-120b-a12b:free",
         "Salve": "liquid/lfm-2.5-2.6b:free",
         "Rx Neuron": "dots-studio/dots-3-note-preview:free",
+
+        # New OpenRouter Models (Task 2)
+        "Nex N2.5 Pro": getattr(settings, "NEX_N2_5_PRO_MODEL", "nex-agi/nex-n2.5-pro:free"),
+        "nex-agi/nex-n2.5-pro:free": getattr(settings, "NEX_N2_5_PRO_MODEL", "nex-agi/nex-n2.5-pro:free"),
+        "Ling 3.0 Flash VL": getattr(settings, "LING_3_0_FLASH_VL_MODEL", "inclusionai/ling-3.0-flash-vl:free"),
+        "inclusionai/ling-3.0-flash-vl:free": getattr(settings, "LING_3_0_FLASH_VL_MODEL", "inclusionai/ling-3.0-flash-vl:free"),
     }
 
     def is_gemini_model(self, model_id: str) -> bool:
@@ -1292,7 +1298,8 @@ class LLMService:
         self,
         image_bytes: bytes,
         mime_type: str = "image/jpeg",
-        question: str = "Please inspect and describe the visible details in this healthcare image."
+        question: str = "Please inspect and describe the visible details in this healthcare image.",
+        model: Optional[str] = None,
     ) -> str:
         """Performs visual analysis on medical images or lab sheets using vision LLMs."""
         if not self.api_key and not self.gemini_key:
@@ -1315,6 +1322,23 @@ class LLMService:
             },
         ]
 
+        # Check if user explicitly requested a specific vision-capable model
+        target_model = self.resolve_model(model) if model else None
+
+        # If a specific OpenRouter vision model was requested (e.g. Ling 3.0 Flash VL)
+        if target_model and self.api_key and self.client and not self.is_gemini_model(target_model):
+            try:
+                logger.info(f"Querying requested vision model: {target_model}")
+                response = await self.client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    max_tokens=1500
+                )
+                if response.choices and response.choices[0].message.content:
+                    return response.choices[0].message.content.strip()
+            except Exception as req_err:
+                logger.warning(f"Requested vision model {target_model} failed: {req_err}. Falling back to default pipeline...")
+
         # 1. Prefer Gemini for vision if configured (outstanding clinical image analysis speed and fidelity)
         if self.gemini_client:
             for gemini_vision_model in [self.gemini_fallback, self.gemini_model]:
@@ -1332,7 +1356,9 @@ class LLMService:
 
         # 2. Fall back to OpenRouter vision models if available
         if self.api_key and self.client:
-            for f_model in [self.vision_model, "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]:
+            ling_vl = getattr(settings, "LING_3_0_FLASH_VL_MODEL", "inclusionai/ling-3.0-flash-vl:free")
+            vision_candidates = [self.vision_model, ling_vl, "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]
+            for f_model in vision_candidates:
                 try:
                     logger.info(f"Attempting OpenRouter vision model: {f_model}")
                     response = await self.client.chat.completions.create(

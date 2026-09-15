@@ -72,6 +72,17 @@ class ChatHistoryManager:
         limit = max_messages or self.max_history_per_session
         raw_msgs = self._history.get(session_id, [])
         if not raw_msgs:
+            try:
+                from app.services.session_service import session_service
+                db_msgs = session_service.get_session_messages(session_id, limit=limit)
+                if db_msgs:
+                    for m in db_msgs:
+                        self.add_message(session_id, m["role"], m["content"], m.get("model"))
+                    raw_msgs = self._history.get(session_id, [])
+            except Exception as e:
+                logger.debug(f"Failed to hydrate history from sqlite for session '{session_id}': {e}")
+
+        if not raw_msgs:
             return []
 
         # Take last N messages

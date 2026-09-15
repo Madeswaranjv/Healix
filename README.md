@@ -20,6 +20,7 @@
 ## ✨ Key Features
 
 - ⚡ **Real-Time Token Streaming (SSE)**: Word-by-word typewriter streaming with immediate response cancellation (`Stop Generating`).
+- 🎙️ **Multilingual Voice Accessibility (TTS & STT)**: Hands-free voice input via microphone Speech-to-Text (`MicButton`) and natural clinical response narration via Text-to-Speech (`SpeakerButton`), powered by Bhashini AI with automated Unicode script language detection (Tamil, English, Hindi, Telugu, Malayalam, etc.).
 - 📄 **Multi-Engine Document Parser**: High-accuracy text extraction from clinical PDFs (`pdfplumber`, `pypdf`, `pypdfium2`, `pdfminer`), Word docs (`.docx`), and lab spreadsheets (`.csv`, `.tsv`, `.txt`).
 - 🌐 **Live Web Search Grounding**: Real-time retrieval of latest 2026 clinical guidelines and medical literature powered by the Tavily Search API.
 - 🖼️ **Medical Vision Analysis**: Vision-guided image inspection for medical documents, skin lesions, and lab reports without definitive diagnosis.
@@ -35,9 +36,10 @@
 |---|---|
 | **Frontend** | React 19, Vite, Tailwind CSS v4, Zustand, Lucide Icons |
 | **Backend** | Python 3.11+, FastAPI, Uvicorn, SQLite, ChromaDB |
-| **AI / LLM** | OpenRouter (MiniMax M3, Ling Flash, Gemma 4, Nemotron) |
+| **AI / LLM** | OpenRouter (Nex N2.5 Pro, Ling 3.0 Flash VL, Gemma 4, Nemotron, Ling Flash, Cortex) & Gemini |
+| **Voice I/O (TTS / STT)** | Bhashini ULCA API (IITM ASR & Multilingual TTS), Web Audio API (16kHz PCM WAV), pydub / imageio-ffmpeg |
 | **Embeddings** | OpenRouter Remote Embeddings (`openai/text-embedding-3-small`) |
-| **Search Engine** | Tavily Search API |
+| **Search Engine** | Tavily Search API with DuckDuckGo fallback |
 | **Doc Readers** | pdfplumber, pypdf, pypdfium2, pdfminer.six, python-docx |
 
 ---
@@ -63,6 +65,23 @@ OpenRouter LLM (Grounded response generation with citations)
 ```
 
 > **Zero Local Model Footprint**: Healix does not download or load any embedding models locally, completely eliminating PyTorch, CUDA, and SentenceTransformer dependencies to run comfortably within 512 MB RAM limits.
+
+---
+
+## 🎙️ Voice Architecture (Speech-to-Text & Text-to-Speech)
+
+Healix integrates end-to-end voice accessibility tailored for patient consultations across major Indian languages and English via Government of India's **Bhashini / ULCA** (AI for Bharat) APIs:
+
+### 1. Speech-to-Text (STT / ASR Voice Input)
+- **Client-Side PCM Capture**: The `MicButton` captures live microphone audio through the browser's Web Audio API and encodes raw Float32 buffers into a standardized 16-bit mono 16kHz WAV Blob.
+- **Dravidian & Multilingual ASR Pipeline**: Recorded audio is submitted to `POST /api/voice/stt`. The backend invokes Bhashini's ASR pipeline (`bhashini/iitm/asr-dravidian--gpu--t4` / Dhruva inference endpoint) with fallback transcoding powered by `pydub` and `imageio-ffmpeg`.
+- **Instant Composer Integration**: Transcriptions are streamed directly into the chat prompt input for hands-free patient symptom reporting.
+
+### 2. Text-to-Speech (TTS Voice Narration)
+- **Response Narration**: Each assistant response bubble features an integrated `SpeakerButton` for clear, audible clinical summaries.
+- **Smart Clinical Text Sanitization**: The `clean_text_for_tts()` pre-processor automatically strips markdown tokens, headers, tables, bullet points, and raw URLs while preserving clinical punctuation and capping speech at optimal sentence boundaries (~380 chars) for sub-second audio generation.
+- **Automated Unicode Script Detection**: Using `detect_language_from_text()`, Healix dynamically inspects Unicode character ranges to identify Tamil (`ta`), Hindi (`hi`), Telugu (`te`), Kannada (`kn`), Malayalam (`ml`), Bengali (`bn`), Gujarati (`gu`), or English (`en`) without requiring manual language switching.
+- **Single-Stream Audio Controller**: A centralized playback coordinator guarantees that only one message audio stream plays at any time, with quick toggle-to-stop capability.
 
 ---
 
@@ -100,7 +119,21 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-small
 OPENROUTER_EMBEDDING_BATCH_SIZE=32
 TAVILY_API_KEY=your_tavily_api_key_here
+
+# OpenRouter Models (Configurable)
+NEX_N2_5_PRO_MODEL=nex-agi/nex-n2.5-pro:free
+LING_3_0_FLASH_VL_MODEL=inclusionai/ling-3.0-flash-vl:free
+
+# Bhashini Voice I/O (Optional - for TTS and STT features)
+BHASHINI_INFERENCE_API_KEY=your_bhashini_inference_api_key_here
 ```
+
+### 📍 Local Businesses & Google Maps Navigation
+When Healix identifies local pharmacies, medical shops, clinics, or hospitals, it provides direct, clickable Google Maps links for each business. Links are generated using:
+1. A verified Google Maps place URL when available from web search results, OR
+2. A Google Maps Search URL safely constructed from the verified business name and location:
+   `https://www.google.com/maps/search/?api=1&query=<URL_ENCODED_NAME_AND_LOCATION>`
+   *(Addresses are never hallucinated; if an exact street is unverified, `Business Name + Area + City` is used).*
 
 Start the FastAPI backend:
 ```bash
@@ -134,7 +167,8 @@ Haelix/
 ├── backend/                        # FastAPI Backend Application
 │   ├── app/
 │   │   ├── core/                   # Database connection, schemas, and system prompts
-│   │   ├── services/               # LLM, Document Parser, Tavily Search, Sessions, Users
+│   │   ├── routes/                 # Voice routes (/tts, /stt, /languages)
+│   │   ├── services/               # LLM, Bhashini Voice, Document Parser, Search, Sessions
 │   │   └── main.py                 # FastAPI endpoints & SSE streaming routes
 │   ├── data/                       # Local SQLite DB and ChromaDB vectorstore (gitignored)
 │   ├── .env.example                # Sample configuration template
@@ -145,7 +179,9 @@ Haelix/
 │   │   │   ├── auth/               # AuthModal (Sign In / Register)
 │   │   │   ├── chat/               # Composer, MessageBubble, Tables, PulseIndicator
 │   │   │   ├── sidebar/            # Sidebar, ChatList, ProfileMenu, Options
-│   │   │   └── settings/           # Patient Clinical Profile Modal
+│   │   │   ├── settings/           # Patient Clinical Profile Modal
+│   │   │   ├── MicButton.tsx       # 16kHz WAV recording & STT transcription button
+│   │   │   └── SpeakerButton.tsx   # Audio playback & Bhashini TTS synthesis button
 │   │   ├── services/               # API service & SSE stream consumer
 │   │   ├── store/                  # Zustand global state management
 │   │   └── index.css               # Design system tokens & Tailwind styles

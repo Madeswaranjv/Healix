@@ -20,6 +20,7 @@ from app.services.user_service import user_service
 from app.services.session_service import session_service
 from app.services.file_service import file_service
 from app.routes.voice import router as voice_router
+from app.core.maps import detect_maps_followup_intent, extract_businesses_from_text, generate_google_maps_url
 
 # Setup logging
 logging.basicConfig(
@@ -554,11 +555,33 @@ async def chat(request: ChatRequest):
     # 4. Fetch prior session conversation history
     chat_history = chat_history_manager.get_prompt_history(session_id=session_id)
 
+    # 4b. Check for follow-up map links intent referencing prior businesses
+    maps_context = []
+    if detect_maps_followup_intent(user_query) and chat_history:
+        for prev in reversed(chat_history):
+            if prev.get("role") == "assistant" and prev.get("content"):
+                prev_biz = extract_businesses_from_text(prev["content"])
+                if prev_biz:
+                    rows = []
+                    for idx, b in enumerate(prev_biz):
+                        b_maps_url = generate_google_maps_url(b["name"], b["location"])
+                        rows.append(f"| {idx+1} | {b['name']} | {b['location']} | [View on Google Maps]({b_maps_url}) |")
+                    maps_context.append(
+                        "### PREVIOUSLY IDENTIFIED MEDICAL SHOPS & DIRECT GOOGLE MAPS LINKS:\n"
+                        f"The user's follow-up request ('{user_query}') refers to the medical shops/pharmacies previously identified in this conversation.\n"
+                        "Here are the exact businesses with their verified Google Maps search links:\n"
+                        "| # | Medical Shop / Facility | Location | Google Maps Link |\n"
+                        "|---|---|---|---|\n"
+                        + "\n".join(rows)
+                        + "\n\n*MANDATORY RULE: Present these exact businesses in your response table with their clickable links. Do not replace them or perform unrelated web searches.*"
+                    )
+                    break
+
     # 5. Build prompt with safety guidelines, user health profile, grounded context, and conversation history
     messages = build_chat_prompt(
         user_message=user_query,
         context_chunks=context_chunks,
-        search_results=None,
+        search_results=maps_context if maps_context else None,
         chat_history=chat_history,
         user_health_profile=user_health_summary,
         use_web_search=request.use_web_search,
@@ -644,10 +667,32 @@ async def chat_stream(request: ChatRequest):
     user_health_summary = user_service.get_user_health_summary(user_id)
     chat_history = chat_history_manager.get_prompt_history(session_id=session_id)
 
+    # Check for follow-up map links intent referencing prior businesses
+    maps_context = []
+    if detect_maps_followup_intent(user_query) and chat_history:
+        for prev in reversed(chat_history):
+            if prev.get("role") == "assistant" and prev.get("content"):
+                prev_biz = extract_businesses_from_text(prev["content"])
+                if prev_biz:
+                    rows = []
+                    for idx, b in enumerate(prev_biz):
+                        b_maps_url = generate_google_maps_url(b["name"], b["location"])
+                        rows.append(f"| {idx+1} | {b['name']} | {b['location']} | [View on Google Maps]({b_maps_url}) |")
+                    maps_context.append(
+                        "### PREVIOUSLY IDENTIFIED MEDICAL SHOPS & DIRECT GOOGLE MAPS LINKS:\n"
+                        f"The user's follow-up request ('{user_query}') refers to the medical shops/pharmacies previously identified in this conversation.\n"
+                        "Here are the exact businesses with their verified Google Maps search links:\n"
+                        "| # | Medical Shop / Facility | Location | Google Maps Link |\n"
+                        "|---|---|---|---|\n"
+                        + "\n".join(rows)
+                        + "\n\n*MANDATORY RULE: Present these exact businesses in your response table with their clickable links. Do not replace them or perform unrelated web searches.*"
+                    )
+                    break
+
     messages = build_chat_prompt(
         user_message=user_query,
         context_chunks=context_chunks,
-        search_results=None,
+        search_results=maps_context if maps_context else None,
         chat_history=chat_history,
         user_health_profile=user_health_summary,
         use_web_search=request.use_web_search,
@@ -744,7 +789,8 @@ async def analyze_image(
     image: UploadFile = File(...),
     question: Optional[str] = Form(None),
     session_id: Optional[str] = Form(None),
-    user_id: Optional[str] = Form("user_default")
+    user_id: Optional[str] = Form("user_default"),
+    model: Optional[str] = Form(None)
 ):
     """Analyzes a medical image or lab sheet using vision LLM without definitive diagnosis."""
     if not image.filename:
@@ -759,7 +805,8 @@ async def analyze_image(
         answer = await llm_service.analyze_image(
             image_bytes=image_bytes,
             mime_type=mime_type,
-            question=prompt_question
+            question=prompt_question,
+            model=model
         )
 
         # Record visual observation into session SQLite & memory if session provided

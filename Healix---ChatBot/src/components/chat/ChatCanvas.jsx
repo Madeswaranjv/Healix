@@ -193,7 +193,7 @@ export default function ChatCanvas() {
       const imageAttachments = attachments.filter((a) => a.isImage && a.file);
       if (imageAttachments.length > 0) {
         for (const img of imageAttachments) {
-          const visionRes = await analyzeImage(img.file, text || "Please analyze this medical image.", targetConvId, activeUserId);
+          const visionRes = await analyzeImage(img.file, text || "Please analyze this medical image.", targetConvId, activeUserId, selectedModel);
           const assistantMsg = {
             id: `msg-${Date.now()}-vis`,
             role: 'assistant',
