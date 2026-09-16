@@ -338,6 +338,7 @@ class LLMService:
         self.gemini_base_url = getattr(settings, "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")
         self.gemini_primary = getattr(settings, "GEMINI_MODEL", "gemini-3.8-flash")
         self.gemini_fallback = getattr(settings, "GEMINI_MODEL_FALLBACK", "gemini-3.7-flash")
+        self.gemini_model = self.gemini_primary
 
         self.client = AsyncOpenAI(
             api_key=self.api_key or "sk-dummy-key",
@@ -1316,32 +1317,76 @@ class LLMService:
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": question or "Please analyze this healthcare image."},
+                    {"type": "text", "text": question or "Please analyze this image."},
                     {"type": "image_url", "image_url": {"url": data_url}},
                 ],
             },
         ]
 
+        def _extract_response_text(resp) -> Optional[str]:
+            """Safely extracts text or refusal message from chat completion response."""
+            if not resp or not getattr(resp, "choices", None):
+                return None
+            for choice in resp.choices:
+                msg = getattr(choice, "message", None)
+                if not msg:
+                    continue
+                content = getattr(msg, "content", None)
+                if content and str(content).strip():
+                    return str(content).strip()
+                refusal = getattr(msg, "refusal", None)
+                if refusal and str(refusal).strip():
+                    return str(refusal).strip()
+            return None
+
         # Check if user explicitly requested a specific vision-capable model
         target_model = self.resolve_model(model) if model else None
 
-        # If a specific OpenRouter vision model was requested (e.g. Ling 3.0 Flash VL)
-        if target_model and self.api_key and self.client and not self.is_gemini_model(target_model):
-            try:
-                logger.info(f"Querying requested vision model: {target_model}")
-                response = await self.client.chat.completions.create(
-                    model=target_model,
-                    messages=messages,
-                    max_tokens=1500
-                )
-                if response.choices and response.choices[0].message.content:
-                    return response.choices[0].message.content.strip()
-            except Exception as req_err:
-                logger.warning(f"Requested vision model {target_model} failed: {req_err}. Falling back to default pipeline...")
+        # Attempt requested model first if provided
+        if target_model:
+            if self.is_gemini_model(target_model) and self.gemini_client:
+                try:
+                    logger.info(f"Querying requested Gemini vision model: {target_model}")
+                    response = await self.gemini_client.chat.completions.create(
+                        model=target_model,
+                        messages=messages,
+                        max_tokens=1500
+                    )
+                    text = _extract_response_text(response)
+                    if text:
+                        return text
+                except Exception as req_err:
+                    logger.warning(f"Requested Gemini vision model {target_model} failed: {req_err}. Falling back to default pipeline...")
+            elif self.api_key and self.client and not self.is_gemini_model(target_model):
+                try:
+                    logger.info(f"Querying requested OpenRouter vision model: {target_model}")
+                    response = await self.client.chat.completions.create(
+                        model=target_model,
+                        messages=messages,
+                        max_tokens=1500
+                    )
+                    text = _extract_response_text(response)
+                    if text:
+                        return text
+                except Exception as req_err:
+                    logger.warning(f"Requested OpenRouter vision model {target_model} failed: {req_err}. Falling back to default pipeline...")
 
-        # 1. Prefer Gemini for vision if configured (outstanding clinical image analysis speed and fidelity)
+        # 1. Gemini Vision Pipeline (fast and high fidelity, with automatic quota/rate-limit fallbacks)
         if self.gemini_client:
-            for gemini_vision_model in [self.gemini_fallback, self.gemini_model]:
+            gemini_candidates = []
+            seen_gemini = set()
+            for m in [
+                target_model if (target_model and self.is_gemini_model(target_model)) else None,
+                self.gemini_primary,
+                "gemini-3.1-flash-lite",
+                self.gemini_fallback,
+                "gemini-flash-latest",
+            ]:
+                if m and m not in seen_gemini:
+                    seen_gemini.add(m)
+                    gemini_candidates.append(m)
+
+            for gemini_vision_model in gemini_candidates:
                 try:
                     logger.info(f"Querying Gemini vision model: {gemini_vision_model}")
                     response = await self.gemini_client.chat.completions.create(
@@ -1349,31 +1394,44 @@ class LLMService:
                         messages=messages,
                         max_tokens=1500
                     )
-                    if response.choices and response.choices[0].message.content:
-                        return response.choices[0].message.content.strip()
+                    text = _extract_response_text(response)
+                    if text:
+                        return text
                 except Exception as g_err:
                     logger.warning(f"Gemini vision model {gemini_vision_model} failed: {g_err}")
 
-        # 2. Fall back to OpenRouter vision models if available
+        # 2. Fall back to OpenRouter vision models (tested vision-capable free models)
         if self.api_key and self.client:
             ling_vl = getattr(settings, "LING_3_0_FLASH_VL_MODEL", "inclusionai/ling-3.0-flash-vl:free")
-            vision_candidates = [self.vision_model, ling_vl, "google/gemma-4-31b-it:free", "inclusionai/ling-3.0-flash-fin:free"]
-            for f_model in vision_candidates:
+            openrouter_candidates = []
+            seen_or = set()
+            for m in [
+                target_model if (target_model and not self.is_gemini_model(target_model)) else None,
+                ling_vl,
+                self.vision_model if self.vision_model and self.vision_model != "google/gemma-4-31b-it:free" else None,
+                "inclusionai/ling-3.0-flash-vl:free",
+            ]:
+                if m and m not in seen_or:
+                    seen_or.add(m)
+                    openrouter_candidates.append(m)
+
+            for f_model in openrouter_candidates:
                 try:
                     logger.info(f"Attempting OpenRouter vision model: {f_model}")
                     response = await self.client.chat.completions.create(
                         model=f_model,
                         messages=messages,
-                        max_tokens=1200
+                        max_tokens=1500
                     )
-                    if response.choices and response.choices[0].message.content:
-                        return response.choices[0].message.content.strip()
+                    text = _extract_response_text(response)
+                    if text:
+                        return text
                 except Exception as fb_err:
                     logger.warning(f"OpenRouter vision model {f_model} failed: {fb_err}")
 
         return (
-            "Unable to analyze the image at this moment due to provider rate limits or image processing constraints. "
-            "Please ensure the image is clear and try again."
+            "Unable to analyze the image at this moment due to provider rate limits or temporary processing constraints. "
+            "Please ensure the image is clear and try again shortly, or select a different model."
         )
 
 

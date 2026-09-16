@@ -800,7 +800,7 @@ async def analyze_image(
         image_bytes = await image.read()
         mime_type = image.content_type or "image/jpeg"
 
-        prompt_question = question or "Please objectively analyze this healthcare image, note visible findings, and suggest next clinical review steps."
+        prompt_question = question or "Please objectively analyze this image, note visible details and findings, and suggest any relevant next steps."
 
         answer = await llm_service.analyze_image(
             image_bytes=image_bytes,
@@ -811,20 +811,23 @@ async def analyze_image(
 
         # Record visual observation into session SQLite & memory if session provided
         if session_id:
-            session_service.add_message(
-                session_id=session_id,
-                role="user",
-                content=f"[Attached Image: {image.filename}] {prompt_question}",
-                user_id=user_id or "user_default"
-            )
-            session_service.add_message(
-                session_id=session_id,
-                role="assistant",
-                content=answer,
-                model=settings.OPENROUTER_VISION_MODEL,
-                sources=[{"id": f"img-doc-{image.filename}", "title": f"Image: {image.filename}", "type": "document"}],
-                user_id=user_id or "user_default"
-            )
+            try:
+                session_service.add_message(
+                    session_id=session_id,
+                    role="user",
+                    content=f"[Attached Image: {image.filename}] {prompt_question}",
+                    user_id=user_id or "user_default"
+                )
+                session_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=answer,
+                    model=model or settings.OPENROUTER_VISION_MODEL,
+                    sources=[{"id": f"img-doc-{image.filename}", "title": f"Image: {image.filename}", "type": "document"}],
+                    user_id=user_id or "user_default"
+                )
+            except Exception as db_err:
+                logger.warning(f"Could not persist image message to session {session_id}: {db_err}")
 
         return {
             "status": "success",

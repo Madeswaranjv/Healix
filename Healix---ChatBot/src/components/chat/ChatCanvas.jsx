@@ -193,21 +193,39 @@ export default function ChatCanvas() {
       const imageAttachments = attachments.filter((a) => a.isImage && a.file);
       if (imageAttachments.length > 0) {
         for (const img of imageAttachments) {
-          const visionRes = await analyzeImage(img.file, text || "Please analyze this medical image.", targetConvId, activeUserId, selectedModel);
-          const assistantMsg = {
-            id: `msg-${Date.now()}-vis`,
-            role: 'assistant',
-            content: visionRes.answer || visionRes.detail || "Image analysis completed.",
-            timestamp: Date.now(),
-            sources: [
-              { id: 'img-1', title: `Vision Analysis: ${img.name}`, type: 'document' },
-            ],
-          };
-          addMessage(targetConvId, assistantMsg);
+          try {
+            const visionRes = await analyzeImage(
+              img.file,
+              text || "Please analyze this image and note visible details.",
+              targetConvId,
+              activeUserId,
+              selectedModel
+            );
+            const assistantMsg = {
+              id: `msg-${Date.now()}-vis`,
+              role: 'assistant',
+              content: visionRes.answer || visionRes.detail || "Image analysis completed.",
+              timestamp: Date.now(),
+              sources: [
+                { id: `img-doc-${Date.now()}`, title: `Vision Analysis: ${img.name}`, type: 'document' },
+              ],
+            };
+            addMessage(targetConvId, assistantMsg);
+            setBackendConnected(true);
+          } catch (imgErr) {
+            console.error('Image analysis error for', img.name, imgErr);
+            const errorMsg = {
+              id: `msg-${Date.now()}-vis-err`,
+              role: 'assistant',
+              content: `**Image Analysis Notice:** Unable to analyze \`${img.name}\`.\n\n*Details: ${imgErr.message || 'The vision service is temporarily unavailable or rate-limited.'}*\n\nPlease try again in a few moments, or select a different model in the selector.`,
+              timestamp: Date.now(),
+              sources: [],
+            };
+            addMessage(targetConvId, errorMsg);
+          }
         }
         setIsTyping(false);
         setIsGenerating(false);
-        setBackendConnected(true);
         return;
       }
 
@@ -362,6 +380,14 @@ export default function ChatCanvas() {
       if (err.name !== 'AbortError') {
         console.error('Chat General Error:', err);
         setBackendConnected(false);
+        const errorMessage = {
+          id: `msg-${Date.now()}-general-err`,
+          role: 'assistant',
+          content: `**Error:** An unexpected error occurred: ${err.message || 'Please try again in a few moments.'}`,
+          timestamp: Date.now(),
+          sources: [],
+        };
+        addMessage(targetConvId, errorMessage);
       }
       setIsTyping(false);
       setIsGenerating(false);

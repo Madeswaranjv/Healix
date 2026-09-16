@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     
     # Vision Model
     OPENROUTER_VISION_MODEL: str = Field(
-        default="google/gemma-4-31b-it:free",
+        default="inclusionai/ling-3.0-flash-vl:free",
         description="Vision model supporting image analysis"
     )
     
