@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Activity, ChevronDown, ChevronUp } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import './auth.css';
 
@@ -28,41 +28,15 @@ function getPasswordStrength(password) {
   return Math.min(4, score);
 }
 
-/* ── Left panel: onboarding-flavored answer card ── */
+/* ── Left panel: Doctor portrait image with other contents removed ── */
 function BrandPanel() {
   return (
-    <div className="auth-brand hidden lg:flex lg:flex-col lg:justify-between p-10 xl:p-14">
-      <div className="flex items-center gap-2">
-        <Activity size={20} strokeWidth={2} className="text-canvas" />
-        <span className="font-serif text-[18px] font-semibold text-canvas">Healix</span>
-      </div>
-
-      <div className="max-w-[380px] animate-in fade-in slide-in-from-left-4 duration-500">
-        <p className="font-serif text-[26px] leading-[1.35] text-canvas mb-6">
-          Clear answers about your health, backed by a real source every time.
-        </p>
-
-        <div className="auth-preview-card p-4">
-          <p className="auth-preview-question mb-2">
-            What should I ask my doctor before my first cardiology visit?
-          </p>
-          <p className="text-[13px] leading-[1.6] text-ink mb-2">
-            Bring your family heart-health history, a list of current medications, and note any symptoms — even ones that seem minor.
-          </p>
-          <div className="skeleton h-3 w-2/3 mb-3" />
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <span className="source-chip">American Heart Association</span>
-            <span className="source-chip">Cleveland Clinic</span>
-          </div>
-          <p className="disclaimer-text">
-            General guidance only. Always confirm with your care provider.
-          </p>
-        </div>
-      </div>
-
-      <p className="text-[13px] text-canvas/60">
-        Add a clinical profile later, or skip it — it's always optional.
-      </p>
+    <div className="hidden lg:block relative w-full h-full min-h-screen overflow-hidden bg-[#0b101b]">
+      <img
+        src="/doctor-register.jpg"
+        alt="Healix Care Specialist"
+        className="w-full h-full object-cover object-top select-none"
+      />
     </div>
   );
 }
@@ -149,7 +123,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="auth-shell grid lg:grid-cols-[minmax(420px,560px)_1fr]">
+    <div className="auth-shell grid lg:grid-cols-2 min-h-screen">
       <BrandPanel />
 
       <div className="flex flex-col min-h-screen">
