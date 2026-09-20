@@ -19,7 +19,7 @@ function GoogleIcon() {
 /* ── Left panel: Doctor portrait image with other contents removed ── */
 function BrandPanel() {
   return (
-    <div className="hidden lg:block relative w-full h-full min-h-screen overflow-hidden bg-[#0b101b]">
+    <div className="hidden lg:block relative w-full h-full min-h-screen overflow-hidden bg-ink">
       <img
         src="/doctor-login.jpg"
         alt="Healix Specialist"

@@ -58,7 +58,7 @@ export default function FileDetailToolbar({
       const html2pdf = (await import('html2pdf.js')).default;
       // Create a styled container for PDF export
       const container = document.createElement('div');
-      container.style.cssText = 'font-family: "IBM Plex Sans", sans-serif; padding: 40px; max-width: 700px; color: #0F172A; line-height: 1.7;';
+      container.style.cssText = 'font-family: "IBM Plex Sans", sans-serif; padding: 40px; max-width: 700px; color: #190801; line-height: 1.7;';
       container.innerHTML = renderMarkdownToHtml(file.content || '');
       document.body.appendChild(container);
 
@@ -222,9 +222,9 @@ function renderMarkdownToHtml(md) {
 
       let tableHtml = '<table style="width:100%; border-collapse:collapse; margin:16px 0; font-size:12px; text-align:left;">';
       
-      tableHtml += '<thead><tr style="border-bottom:2px solid #e2e8f0; background:#f8fafc;">';
+      tableHtml += '<thead><tr style="border-bottom:2px solid #E5D7C6; background:#FDF9F0;">';
       headerCells.forEach(cell => {
-        tableHtml += `<th style="padding:10px 14px; font-weight:600; color:#0f172a;">${parseInline(cell)}</th>`;
+        tableHtml += `<th style="padding:10px 14px; font-weight:600; color:#190801;">${parseInline(cell)}</th>`;
       });
       tableHtml += '</tr></thead>';
 
@@ -232,10 +232,10 @@ function renderMarkdownToHtml(md) {
       bodyLines.forEach((row, idx) => {
         if (!row.includes('|')) return;
         const cells = parseCells(row);
-        const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-        tableHtml += `<tr style="border-bottom:1px solid #f1f5f9; background:${bg};">`;
+        const bg = idx % 2 === 0 ? '#FDF9F0' : '#F7EFE6';
+        tableHtml += `<tr style="border-bottom:1px solid #EFE5DC; background:${bg};">`;
         cells.forEach(cell => {
-          tableHtml += `<td style="padding:10px 14px; color:#334155;">${parseInline(cell)}</td>`;
+          tableHtml += `<td style="padding:10px 14px; color:#694436;">${parseInline(cell)}</td>`;
         });
         tableHtml += '</tr>';
       });
