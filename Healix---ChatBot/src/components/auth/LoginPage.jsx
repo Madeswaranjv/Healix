@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, Eye, EyeOff, Activity } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, Activity } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import './auth.css';
 
@@ -16,41 +16,15 @@ function GoogleIcon() {
   );
 }
 
-/* ── Left panel: a real, characteristic Healix answer card, not marketing copy ── */
+/* ── Left panel: Doctor portrait image with other contents removed ── */
 function BrandPanel() {
   return (
-    <div className="auth-brand hidden lg:flex lg:flex-col lg:justify-between p-10 xl:p-14">
-      <div className="flex items-center gap-2">
-        <Activity size={20} strokeWidth={2} className="text-canvas" />
-        <span className="font-serif text-[18px] font-semibold text-canvas">Healix</span>
-      </div>
-
-      <div className="max-w-[380px] animate-in fade-in slide-in-from-left-4 duration-500">
-        <p className="font-serif text-[26px] leading-[1.35] text-canvas mb-6">
-          Pick up your care conversation right where you left it.
-        </p>
-
-        <div className="auth-preview-card p-4">
-          <p className="auth-preview-question mb-2">
-            Is it normal for my resting heart rate to drop after starting the new medication?
-          </p>
-          <p className="text-[13px] leading-[1.6] text-ink mb-2">
-            Yes — some blood pressure medications slow resting heart rate as part of how they work. A drop of 10&ndash;15 bpm is common and usually not a concern.
-          </p>
-          <div className="skeleton h-3 w-3/5 mb-3" />
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <span className="source-chip">Mayo Clinic</span>
-            <span className="source-chip">MedlinePlus</span>
-          </div>
-          <p className="disclaimer-text">
-            General guidance only. Always confirm with your care provider.
-          </p>
-        </div>
-      </div>
-
-      <p className="text-[13px] text-canvas/60">
-        Every answer traces back to a real, checkable source.
-      </p>
+    <div className="hidden lg:block relative w-full h-full min-h-screen overflow-hidden bg-[#0b101b]">
+      <img
+        src="/doctor-login.jpg"
+        alt="Healix Specialist"
+        className="w-full h-full object-cover object-top select-none"
+      />
     </div>
   );
 }
@@ -109,7 +83,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-shell grid lg:grid-cols-[minmax(420px,560px)_1fr]">
+    <div className="auth-shell grid lg:grid-cols-2 min-h-screen">
       <BrandPanel />
 
       <div className="flex flex-col min-h-screen">

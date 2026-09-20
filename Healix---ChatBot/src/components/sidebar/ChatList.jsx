@@ -4,6 +4,7 @@ import ChatListItem from './ChatListItem';
 import ChatFilterMenu from './ChatFilterMenu';
 import { useStore } from '../../store/useStore';
 import IconButton from '../common/IconButton';
+import { SkeletonChatList } from '../common/Skeleton';
 
 /**
  * Chats list.
@@ -14,6 +15,7 @@ import IconButton from '../common/IconButton';
 export default function ChatList({ onNavigate }) {
   const {
     conversations,
+    isLoadingSessions,
     activeConversationId,
     setActiveConversation,
     deleteConversation,
@@ -54,7 +56,9 @@ export default function ChatList({ onNavigate }) {
 
       {/* Flat list */}
       <div className="flex-1 overflow-y-auto transition-all duration-300 ease-out opacity-100 mt-2">
-        {conversations.length === 0 ? (
+        {isLoadingSessions && conversations.length === 0 ? (
+          <SkeletonChatList count={6} />
+        ) : conversations.length === 0 ? (
           <p className="text-sm text-muted px-4 py-6 text-center">
             No conversations yet. Start a new chat.
           </p>

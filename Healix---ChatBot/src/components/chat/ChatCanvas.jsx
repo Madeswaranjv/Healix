@@ -5,6 +5,7 @@ import MessageList from './MessageList';
 import Composer from './Composer';
 import DisclaimerStrip from './DisclaimerStrip';
 import PulseIndicator from './PulseIndicator';
+import { SkeletonChatArea } from '../common/Skeleton';
 import IconButton from '../common/IconButton';
 import { useStore } from '../../store/useStore';
 import { sendChatMessage, streamChatMessage, uploadDocument, analyzeImage, checkBackendHealth, API_BASE } from '../../services/api';
@@ -27,6 +28,8 @@ export default function ChatCanvas() {
     addMessage,
     updateMessage,
     loadSessionMessages,
+    isLoadingMessages,
+    loadingSessionId,
     createSessionOnBackend,
     isTyping,
     setIsTyping,
@@ -53,7 +56,17 @@ export default function ChatCanvas() {
   const currentMsgIdRef = useRef(null);
 
   const activeConv = conversations.find((c) => c.id === activeConversationId);
-  const activeMessages = activeConversationId ? (messages[activeConversationId] || []) : [];
+  const sessionMessages = activeConversationId ? messages[activeConversationId] : null;
+  const activeMessages = sessionMessages || [];
+
+  // Determine if messages are loading for the active conversation
+  const isMsgLoading = Boolean(
+    activeConversationId && (
+      (isLoadingMessages && loadingSessionId === activeConversationId) ||
+      (sessionMessages === undefined && (activeConv?.messageCount > 0 || !conversations.length)) ||
+      (isLoadingMessages && !sessionMessages)
+    )
+  );
 
   // Check backend health, load profile & sessions on initial mount
   useEffect(() => {
@@ -459,7 +472,11 @@ export default function ChatCanvas() {
       {/* Scrollable messages area — ONLY this container scrolls */}
       <main className="flex-1 overflow-y-auto min-h-0 relative">
         <div className="max-w-[760px] w-full mx-auto px-3 sm:px-4 lg:px-0 flex flex-col min-h-full">
-          {activeMessages.length === 0 ? (
+          {isMsgLoading ? (
+            <div className="flex-1 py-3 sm:py-4">
+              <SkeletonChatArea />
+            </div>
+          ) : activeMessages.length === 0 ? (
             <div className="flex-1 flex items-center justify-center py-8 sm:py-12">
               <EmptyState onPromptSelect={handlePromptSelect} />
             </div>
@@ -490,7 +507,7 @@ export default function ChatCanvas() {
             isGenerating={isGenerating}
           />
           {/* Disclaimer — only visible on a new chat before prompts are entered */}
-          {activeMessages.length === 0 && <DisclaimerStrip />}
+          {!isMsgLoading && activeMessages.length === 0 && <DisclaimerStrip />}
         </div>
       </footer>
     </div>

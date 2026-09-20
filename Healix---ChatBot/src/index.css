@@ -218,12 +218,21 @@
   /* Skeleton shimmer bar */
   .skeleton {
     background: linear-gradient(90deg,
-        var(--color-border) 25%,
-        var(--color-canvas) 50%,
-        var(--color-border) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
+        var(--color-border) 20%,
+        rgba(241, 245, 249, 0.9) 50%,
+        var(--color-border) 80%);
+    background-size: 250% 100%;
+    animation: shimmer 1.8s ease-in-out infinite;
     border-radius: var(--radius-sm);
+    will-change: background-position;
+  }
+
+  .dark .skeleton {
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0.05) 20%,
+        rgba(255, 255, 255, 0.13) 50%,
+        rgba(255, 255, 255, 0.05) 80%);
+    background-size: 250% 100%;
   }
 
   /* Pulse line indicator */

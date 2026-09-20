@@ -279,6 +279,9 @@ export const useStore = create((set, get) => ({
       activeConversationId: null,
       conversations: [],
       messages: {},
+      isLoadingSessions: false,
+      isLoadingMessages: false,
+      loadingSessionId: null,
       isAuthModalOpen: false,
       userProfile: {
         id: 'user_default',
@@ -353,14 +356,16 @@ export const useStore = create((set, get) => ({
 
   // --- Conversations list ---
   conversations: [],
+  isLoadingSessions: false,
   setConversations: (convs) => set({ conversations: convs }),
 
   loadUserSessions: async () => {
     const userId = get().activeUserId || 'user_default';
     if (!userId) {
-      set({ conversations: [] });
+      set({ conversations: [], isLoadingSessions: false });
       return;
     }
+    set({ isLoadingSessions: true });
     try {
       const sessions = await fetchUserSessions(userId);
       if (Array.isArray(sessions)) {
@@ -377,6 +382,8 @@ export const useStore = create((set, get) => ({
       }
     } catch (err) {
       console.warn('Failed to load user sessions from backend:', err);
+    } finally {
+      set({ isLoadingSessions: false });
     }
   },
 
@@ -438,12 +445,15 @@ export const useStore = create((set, get) => ({
 
   // --- Messages for active conversation ---
   messages: {},
+  isLoadingMessages: false,
+  loadingSessionId: null,
   setMessages: (convId, msgs) => set((s) => ({
     messages: { ...s.messages, [convId]: msgs },
   })),
 
   loadSessionMessages: async (sessionId) => {
     if (!sessionId) return;
+    set({ isLoadingMessages: true, loadingSessionId: sessionId });
     try {
       const details = await fetchSessionDetails(sessionId);
       if (details && Array.isArray(details.messages)) {
@@ -463,6 +473,8 @@ export const useStore = create((set, get) => ({
       }
     } catch (err) {
       console.warn(`Failed to load messages for session ${sessionId}:`, err);
+    } finally {
+      set({ isLoadingMessages: false, loadingSessionId: null });
     }
   },
 
