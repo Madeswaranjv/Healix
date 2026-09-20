@@ -31,7 +31,6 @@ Healix---ChatBot/dist/
 
 # Misc
 dist/
-sidebar/
 *.log
 .DS_Store
 Thumbs.db

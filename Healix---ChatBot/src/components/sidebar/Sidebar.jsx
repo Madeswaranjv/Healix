@@ -71,12 +71,11 @@ export function Sidebar() {
           }
         }
       }}
-      style={asideStyle}
-      className="
-        relative z-30 h-screen bg-surface flex-shrink-0 min-w-0
-        hidden lg:flex flex-col
-        border-r border-border
-      "
+      style={{
+        ...asideStyle,
+        display: 'flex',
+      }}
+      className="relative z-30 h-screen bg-surface flex-shrink-0 min-w-0 flex flex-col border-r border-border"
       aria-label="Desktop navigation sidebar"
     >
       {/* Toggle button — centered on right border via left-full + -translate-x-1/2 */}

@@ -44,6 +44,8 @@ export default function ChatCanvas() {
     isFilesPanelOpen,
     setFilesPanelOpen,
     loadUserFiles,
+    isSidebarOpen,
+    toggleSidebar,
   } = useStore();
 
   const [editingTitle, setEditingTitle] = useState(false);
@@ -440,6 +442,23 @@ export default function ChatCanvas() {
 
   return (
     <div className="flex-1 flex flex-col bg-canvas h-[100dvh] max-h-[100dvh] overflow-hidden relative">
+      {/* Floating Header Left Actions: Open sidebar when collapsed */}
+      {!isSidebarOpen && (
+        <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
+          <button
+            onClick={() => {
+              toggleSidebar();
+              setMobileSidebarOpen(true);
+            }}
+            className="p-2 rounded-xl text-muted hover:text-ink hover:bg-surface border border-border/60 bg-surface/80 backdrop-blur-sm shadow-xs transition-colors cursor-pointer"
+            aria-label="Open sidebar"
+            title="Open sidebar"
+          >
+            <Menu size={20} />
+          </button>
+        </div>
+      )}
+
       {/* Floating Header Actions */}
       <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
         <div className="relative group/filebtn">
