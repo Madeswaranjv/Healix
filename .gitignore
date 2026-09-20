@@ -16,9 +16,11 @@ build/
 
 # Environment variables — never commit secrets
 backend/.env
+Healix---ChatBot/.env
 .env
 .env.local
 .env.*.local
+*.env
 
 # Node
 Healix---ChatBot/node_modules/

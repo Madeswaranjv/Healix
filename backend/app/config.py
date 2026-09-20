@@ -74,6 +74,12 @@ class Settings(BaseSettings):
         default=str(BACKEND_DIR / "data" / "vectorstore"),
         description="ChromaDB local persistence directory"
     )
+
+    # Database Configuration (Neon PostgreSQL)
+    DATABASE_URL: str = Field(
+        default="",
+        description="PostgreSQL / Neon connection string"
+    )
     
     # CORS & Server
     FRONTEND_ORIGIN: str = Field(default="http://localhost:5173", description="Frontend allowed origin")
