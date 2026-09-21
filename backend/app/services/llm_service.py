@@ -418,13 +418,16 @@ class LLMService:
                     attempts.append((self.gemini_client, fb, True))
             # OpenRouter fallback if configured
             if self.api_key and self.client:
-                attempts.append((self.client, self.fallback_model, False))
+                for or_model in [self.primary_model, self.fallback_model, "nvidia/nemotron-3-super-120b-a12b:free"]:
+                    if or_model and (self.client, or_model, False) not in attempts:
+                        attempts.append((self.client, or_model, False))
         else:
             # Target is OpenRouter
             if self.api_key and self.client:
                 attempts.append((self.client, target_model, False))
-                if target_model != self.fallback_model:
-                    attempts.append((self.client, self.fallback_model, False))
+                for or_model in [self.fallback_model, self.primary_model, "nvidia/nemotron-3-super-120b-a12b:free"]:
+                    if or_model and (self.client, or_model, False) not in attempts:
+                        attempts.append((self.client, or_model, False))
             # Gemini fallback if configured
             if self.gemini_client:
                 attempts.append((self.gemini_client, self.gemini_fallback, True))
@@ -708,7 +711,7 @@ class LLMService:
                             "the retrieved sources ([1], [2]) with clear tables and bullet points."
                         )
                     working_messages.append({
-                        "role": "system",
+                        "role": "user",
                         "content": synth
                     })
                     final_response = await current_client.chat.completions.create(
