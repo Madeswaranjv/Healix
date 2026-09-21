@@ -43,17 +43,25 @@ export async function registerUser(payload) {
  * Log in with email and password
  */
 export async function loginUser(email, password) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || `Login failed (${res.status})`);
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: (email || '').trim(), password: password || '' }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `Login failed (${res.status})`);
+    }
+    return await res.json();
+  } catch (err) {
+    if (err.name === 'TypeError' && (err.message || '').toLowerCase().includes('fetch')) {
+      throw new Error(`Unable to reach the Healix server (${API_BASE}). Please ensure the backend is running.`);
+    }
+    throw err;
   }
-  return await res.json();
 }
+
 
 /**
  * Log out and invalidate token

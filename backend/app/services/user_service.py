@@ -23,15 +23,26 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    """Verifies plain password against stored salted hash."""
+    """Verifies plain password against stored salted hash with trimmed fallback for mobile autofill."""
     if not stored_hash:
         return True  # Allows demo account access without password
+    if not password:
+        return False
     try:
         salt, pw_hash = stored_hash.split("$", 1)
+        # 1. Exact match
         test_hash = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000).hex()
-        return secrets.compare_digest(pw_hash, test_hash)
+        if secrets.compare_digest(pw_hash, test_hash):
+            return True
+        # 2. Trimmed match (handles trailing spaces from mobile keyboards/autofill)
+        if password.strip() != password:
+            strip_hash = hashlib.pbkdf2_hmac("sha256", password.strip().encode("utf-8"), salt.encode("utf-8"), 100000).hex()
+            if secrets.compare_digest(pw_hash, strip_hash):
+                return True
+        return False
     except Exception:
         return False
+
 
 
 class UserProfileModel(BaseModel):
@@ -87,7 +98,7 @@ class UserService:
             return self._row_to_dict(row)
 
     def get_user_by_identifier(self, identifier: str) -> Optional[Dict[str, Any]]:
-        """Retrieves a user by email, ID, or preferred name with deterministic priority."""
+        """Retrieves a user by email, ID, full name, preferred name, or email prefix."""
         if not identifier:
             return None
         clean_id = identifier.strip()
@@ -98,15 +109,37 @@ class UserService:
             row = cursor.fetchone()
             if row:
                 return self._row_to_dict(row)
+
             # 2. Exact match on unique user ID
             cursor.execute("SELECT * FROM users WHERE id = ?", (clean_id,))
             row = cursor.fetchone()
             if row:
                 return self._row_to_dict(row)
-            # 3. Match on preferred name (most recently active/created first)
+
+            # 3. Match on full name (case-insensitive, e.g. 'Madeswaran J V')
+            cursor.execute("SELECT * FROM users WHERE LOWER(full_name) = LOWER(?) ORDER BY updated_at DESC", (clean_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(row)
+
+            # 4. Match on preferred name (case-insensitive, e.g. 'Madeswaran')
             cursor.execute("SELECT * FROM users WHERE LOWER(preferred_name) = LOWER(?) ORDER BY updated_at DESC", (clean_id,))
             row = cursor.fetchone()
-            return self._row_to_dict(row)
+            if row:
+                return self._row_to_dict(row)
+
+            # 5. Match on email username prefix (e.g. 'madeswaranjv' for 'madeswaranjv@gmail.com')
+            cursor.execute("""
+                SELECT * FROM users 
+                WHERE LOWER(SUBSTR(email, 1, CASE WHEN INSTR(email, '@') > 0 THEN INSTR(email, '@') - 1 ELSE LENGTH(email) END)) = LOWER(?)
+                ORDER BY updated_at DESC
+            """, (clean_id,))
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_dict(row)
+
+            return None
+
 
 
     def get_user_by_token(self, token: str) -> Optional[Dict[str, Any]]:

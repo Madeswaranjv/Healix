@@ -72,6 +72,23 @@ def test_new_user_registration_and_login(client):
     assert res_case.json()["user"]["id"] == user_id
     token = res_case.json()["token"]
 
+    # 2d. Login with full name (case-insensitive)
+    res_fullname = client.post("/auth/login", json={"email": f"Marcus Vance {ts}".lower(), "password": password})
+    assert res_fullname.status_code == 200
+    assert res_fullname.json()["user"]["id"] == user_id
+
+    # 2e. Login with email prefix username (e.g. 'test_patient_...')
+    email_prefix = email.split("@")[0]
+    res_prefix = client.post("/auth/login", json={"email": email_prefix, "password": password})
+    assert res_prefix.status_code == 200
+    assert res_prefix.json()["user"]["id"] == user_id
+
+    # 2f. Login with password containing accidental trailing space (autofill resilient)
+    res_trail_pw = client.post("/auth/login", json={"email": email, "password": password + " "})
+    assert res_trail_pw.status_code == 200
+    assert res_trail_pw.json()["user"]["id"] == user_id
+
+
     # 3. Login with wrong password must fail
     res_fail = client.post("/auth/login", json={"email": email, "password": "WrongPassword!"})
     assert res_fail.status_code == 401
