@@ -122,6 +122,37 @@ class Settings(BaseSettings):
         description="Bhashini Inference Pipeline URL"
     )
 
+    # ChroniQ Patient MCP Integration Settings
+    CHRONIQ_MCP_ENABLED: bool = Field(default=True, description="Enable ChroniQ Patient MCP client")
+    CHRONIQ_MCP_URL: str = Field(
+        default="https://chroniq-mcp.onrender.com/mcp",
+        description="ChroniQ MCP server URL endpoint"
+    )
+    CHRONIQ_MCP_TRANSPORT: str = Field(
+        default="streamable-http",
+        description="ChroniQ MCP transport type ('streamable-http' or 'sse')"
+    )
+    CHRONIQ_MCP_REQUEST_TIMEOUT: float = Field(default=30.0, description="MCP request timeout in seconds")
+    CHRONIQ_MCP_CONNECT_TIMEOUT: float = Field(default=10.0, description="MCP connection timeout in seconds")
+    CHRONIQ_MCP_AUTH_FORWARDING_ENABLED: bool = Field(
+        default=True,
+        description="Forward user JWT bearer token to ChroniQ MCP server"
+    )
+    CHRONIQ_MCP_MUTATIONS_ALLOWED: bool = Field(
+        default=False,
+        description="Allow state-mutating MCP tool calls (booking, canceling, profile update)"
+    )
+    CHRONIQ_MCP_TOOL_DISCOVERY_CACHE_TTL: int = Field(
+        default=60,
+        description="Cache TTL in seconds for discovered MCP tools"
+    )
+    CHRONIQ_MCP_LOG_TOOL_CALLS: bool = Field(default=True, description="Log MCP tool invocations")
+    CHRONIQ_MCP_LOG_SENSITIVE_DATA: bool = Field(
+        default=False,
+        description="Whether to log sensitive arguments/tokens in tool calls"
+    )
+
+
 
     model_config = SettingsConfigDict(
         env_file=str(BACKEND_DIR / ".env") if (BACKEND_DIR / ".env").is_file() else None,

@@ -11,9 +11,11 @@ from pydantic import BaseModel, Field
 
 from app.services.search_service import search_service
 from app.services.file_service import file_service
+from app.services.chroniq_mcp_client import chroniq_mcp_client
 from app.core.maps import generate_google_maps_url, extract_local_businesses_from_search
 
 logger = logging.getLogger("healix.mcp")
+
 
 
 class MCPToolParameter(BaseModel):
@@ -232,6 +234,17 @@ class MCPService:
                     "parameters": tool_def.input_schema
                 }
             })
+        if chroniq_mcp_client.is_enabled:
+            for c_name, c_meta in chroniq_mcp_client._cached_tools.items():
+                if c_name not in self._tools:
+                    openai_tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": c_name,
+                            "description": c_meta.get("description", ""),
+                            "parameters": c_meta.get("parameters", {"type": "object", "properties": {}})
+                        }
+                    })
         return openai_tools
 
     async def execute_tool(self, name: str, arguments: Dict[str, Any]) -> MCPToolResult:
@@ -260,6 +273,19 @@ class MCPService:
         }
         resolved_name = tool_alias_map.get(normalized, name)
 
+        # Dispatch to ChroniQ MCP Client if this is a ChroniQ patient tool
+        if chroniq_mcp_client.is_chroniq_tool(resolved_name) or chroniq_mcp_client.is_chroniq_tool(name):
+            target_name = resolved_name if chroniq_mcp_client.is_chroniq_tool(resolved_name) else name
+            raw_res = await chroniq_mcp_client.execute_tool(target_name, arguments)
+            return MCPToolResult(
+                tool_name=target_name,
+                success=raw_res.get("success", False),
+                content=raw_res.get("content", ""),
+                sources=raw_res.get("sources", []),
+                raw_data=raw_res.get("raw_data"),
+                execution_time_ms=raw_res.get("execution_time_ms", (time.perf_counter() - start_time) * 1000)
+            )
+
         if resolved_name not in self._handlers:
             err_msg = f"Tool '{name}' (resolved: '{resolved_name}') is not registered in the MCP tool registry."
             logger.error(f"[MCP Tool Error] {err_msg}")
@@ -270,6 +296,7 @@ class MCPService:
                 sources=[],
                 execution_time_ms=(time.perf_counter() - start_time) * 1000
             )
+
 
         handler = self._handlers[resolved_name]
         try:
